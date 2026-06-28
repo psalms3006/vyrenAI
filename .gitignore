@@ -1,0 +1,30 @@
+# Secrets — never committed
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs (Tier 6+)
+*.log
+
+# Memory store (Tier 4+)
+memory.json
+
+# Config with real values (Tier 6+)
+config.local.yaml

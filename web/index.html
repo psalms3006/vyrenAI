@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="VYREN">
+<meta name="theme-color" content="#08080f">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect fill='%2308080f' width='180' height='180' rx='40'/><text x='90' y='125' text-anchor='middle' font-size='110'>⚡</text></svg>">
+<title>VYREN</title>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#08080f;--bg2:#10101a;--bg3:#14142a;--bg-input:#0d0d18;
+  --border:#1a1a2e;--border2:#2a2a4e;
+  --cyan:#00d4ff;--cyan-d:rgba(0,212,255,.15);
+  --green:#00ff88;--green-d:rgba(0,255,136,.12);
+  --amber:#ffaa00;--amber-d:rgba(255,170,0,.12);
+  --red:#ff4466;--red-d:rgba(255,68,102,.12);
+  --txt:#c8c8d4;--txt-h:#fff;--txt-m:#6a6a80;
+  --r:12px;--safe-top:env(safe-area-inset-top,0px);--safe-bot:env(safe-area-inset-bottom,0px)
+}
+html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--txt);font-size:15px;line-height:1.5;overflow:hidden;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
+::-webkit-scrollbar{width:3px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:10px}
+
+/* ── LAYOUT ── */
+#app{display:flex;flex-direction:column;height:100vh;height:100dvh;padding-top:var(--safe-top)}
+#topbar{display:flex;align-items:center;padding:10px 16px;background:var(--bg2);border-bottom:1px solid var(--border);gap:10px;flex-shrink:0;min-height:52px}
+.brand{display:flex;align-items:center;gap:8px}
+.brand-name{font-size:16px;font-weight:700;color:var(--txt-h);letter-spacing:2px}
+.status-pill{display:flex;align-items:center;gap:5px;font-size:11px;font-weight:500;color:var(--txt-m);background:var(--bg);padding:4px 10px;border-radius:20px;border:1px solid var(--border)}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--txt-m);flex-shrink:0}
+.dot.on{background:var(--green);box-shadow:0 0 6px var(--green);animation:gpulse 2s ease-in-out infinite}
+.dot.wait{background:var(--amber);animation:apulse 1s ease-in-out infinite}
+.dot.off{background:var(--red)}
+@keyframes gpulse{0%,100%{box-shadow:0 0 4px var(--green)}50%{box-shadow:0 0 12px var(--green),0 0 24px rgba(0,255,136,.25)}}
+@keyframes apulse{0%,100%{opacity:1}50%{opacity:.3}}
+.clock{margin-left:auto;font-size:12px;font-weight:500;color:var(--cyan);font-variant-numeric:tabular-nums}
+
+/* ── TABS ── */
+.tabs{display:flex;flex:1;overflow:hidden;position:relative}
+.tab{display:none;flex-direction:column;overflow:hidden;width:100%;height:100%}
+.tab.active{display:flex}
+
+/* ── BOTTOM NAV ── */
+#nav{display:flex;background:var(--bg2);border-top:1px solid var(--border);padding-bottom:var(--safe-bot);flex-shrink:0}
+#nav button{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 0 6px;background:none;border:none;color:var(--txt-m);font-size:10px;font-weight:600;letter-spacing:.5px;cursor:pointer;transition:color .2s}
+#nav button svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+#nav button.active{color:var(--cyan)}
+#nav button:active{opacity:.6}
+
+/* ── CHAT ── */
+#chat-messages{flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:12px;scroll-behavior:smooth}
+.msg{max-width:85%;padding:10px 14px;border-radius:var(--r);font-size:14px;line-height:1.6;word-wrap:break-word;animation:fadeUp .3s ease}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.msg.user{align-self:flex-end;background:var(--bg3);border:1px solid var(--border2);color:var(--txt-h);border-bottom-right-radius:4px}
+.msg.vyren{align-self:flex-start;background:var(--bg2);border:1px solid var(--border);border-bottom-left-radius:4px}
+.msg.vyren strong{color:var(--cyan)}
+.msg.system{align-self:center;font-size:11px;color:var(--txt-m);background:none;border:none;padding:4px 12px}
+.msg.tool-call{align-self:center;font-size:11px;color:var(--amber);background:var(--amber-d);border:1px solid rgba(255,170,0,.2);border-radius:20px;padding:5px 14px;max-width:90%;text-align:center}
+.msg.confirm{align-self:center;background:var(--red-d);border:1px solid rgba(255,68,102,.2);border-radius:var(--r);padding:12px 16px;max-width:90%;text-align:center}
+.confirm-actions{display:flex;gap:8px;margin-top:10px;justify-content:center}
+.confirm-actions button{padding:8px 20px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer}
+.btn-approve{background:var(--green);color:#000}
+.btn-decline{background:var(--bg);color:var(--txt);border:1px solid var(--border2)!important}
+.typing{display:inline-flex;gap:4px;padding:4px 0}
+.typing span{width:6px;height:6px;border-radius:50%;background:var(--cyan);animation:bounce .6s ease-in-out infinite}
+.typing span:nth-child(2){animation-delay:.15s}
+.typing span:nth-child(3){animation-delay:.3s}
+@keyframes bounce{0%,100%{transform:translateY(0);opacity:.4}50%{transform:translateY(-4px);opacity:1}}
+
+/* ── INPUT ── */
+#chat-input-bar{display:flex;gap:8px;padding:10px 12px;padding-bottom:max(10px,var(--safe-bot));background:var(--bg2);border-top:1px solid var(--border);flex-shrink:0;align-items:flex-end}
+#chat-input-bar textarea{flex:1;background:var(--bg-input);border:1px solid var(--border);border-radius:20px;padding:10px 16px;color:var(--txt-h);font-size:14px;font-family:inherit;resize:none;max-height:100px;min-height:40px;line-height:1.4;outline:none;transition:border-color .2s}
+#chat-input-bar textarea:focus{border-color:var(--cyan)}
+#chat-input-bar textarea::placeholder{color:var(--txt-m)}
+.send-btn{width:40px;height:40px;border-radius:50%;background:var(--cyan);border:none;color:#000;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:transform .15s,opacity .15s}
+.send-btn:active{transform:scale(.9)}
+.send-btn:disabled{opacity:.3;pointer-events:none}
+.send-btn svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+.mic-btn{width:40px;height:40px;border-radius:50%;background:var(--bg3);border:1px solid var(--border);color:var(--txt-m);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .2s}
+.mic-btn:active,.mic-btn.recording{background:var(--red-d);border-color:var(--red);color:var(--red)}
+.mic-btn.recording{animation:mpulse 1s ease-in-out infinite}
+@keyframes mpulse{0%,100%{box-shadow:0 0 0 0 rgba(255,68,102,.3)}50%{box-shadow:0 0 0 10px rgba(255,68,102,0)}}
+
+/* ── MONITOR ── */
+#monitor{padding:16px;overflow-y:auto}
+.mg-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:12px}
+.mg-card h3{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--txt-m);margin-bottom:14px;display:flex;align-items:center;gap:6px}
+.mg-card h3::before{content:'';width:3px;height:10px;background:var(--cyan);border-radius:2px}
+.gauge-row{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.gauge-label{font-size:12px;color:var(--txt-m);width:42px;flex-shrink:0}
+.gauge-bar{flex:1;height:8px;background:var(--bg);border-radius:4px;overflow:hidden}
+.gauge-fill{height:100%;border-radius:4px;transition:width .8s ease,background .3s}
+.gauge-val{font-size:13px;font-weight:600;color:var(--txt-h);width:44px;text-align:right;flex-shrink:0;font-variant-numeric:tabular-nums}
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.info-cell{background:var(--bg);border-radius:8px;padding:10px 12px}
+.info-cell .label{font-size:10px;color:var(--txt-m);text-transform:uppercase;letter-spacing:.5px}
+.info-cell .value{font-size:15px;font-weight:600;color:var(--txt-h);margin-top:2px}
+
+/* ── MEMORY ── */
+#memory{padding:16px;overflow-y:auto}
+.mem-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:10px;transition:border-color .2s}
+.mem-card:active{border-color:var(--border2)}
+.mem-key{font-size:11px;font-weight:600;color:var(--cyan);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.mem-val{font-size:13px;color:var(--txt);line-height:1.5}
+.mem-empty{text-align:center;color:var(--txt-m);padding:40px 20px;font-size:13px}
+.mem-search{width:100%;background:var(--bg-input);border:1px solid var(--border);border-radius:10px;padding:10px 14px;color:var(--txt-h);font-size:14px;font-family:inherit;outline:none;margin-bottom:14px}
+.mem-search:focus{border-color:var(--cyan)}
+.mem-search::placeholder{color:var(--txt-m)}
+
+/* ── TOOLS ── */
+#tools{padding:16px;overflow-y:auto}
+.tool-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:10px;display:flex;align-items:flex-start;gap:12px}
+.tool-icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.tool-icon.safe{background:var(--green-d);color:var(--green)}
+.tool-icon.warn{background:var(--amber-d);color:var(--amber)}
+.tool-info{flex:1;min-width:0}
+.tool-name{font-size:13px;font-weight:600;color:var(--txt-h)}
+.tool-desc{font-size:12px;color:var(--txt-m);margin-top:2px;line-height:1.4}
+.tool-badge{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:2px 6px;border-radius:4px;margin-top:6px;display:inline-block}
+.tool-badge.safe{background:var(--green-d);color:var(--green)}
+.tool-badge.consequential{background:var(--red-d);color:var(--red)}
+
+/* ── SETTINGS ── */
+#settings{padding:16px;overflow-y:auto}
+.set-group{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:12px}
+.set-group h3{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--txt-m);margin-bottom:12px;display:flex;align-items:center;gap:6px}
+.set-group h3::before{content:'';width:3px;height:10px;background:var(--cyan);border-radius:2px}
+.set-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)}
+.set-row:last-child{border-bottom:none}
+.set-label{font-size:13px;color:var(--txt)}
+.set-value{font-size:13px;font-weight:500;color:var(--txt-h)}
+.set-btn{width:100%;padding:12px;border:1px solid var(--border);border-radius:10px;background:var(--bg);color:var(--txt);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;transition:all .2s;margin-top:8px}
+.set-btn:active{transform:scale(.98);background:var(--bg3)}
+.set-btn.danger{border-color:rgba(255,68,102,.3);color:var(--red)}
+.set-btn.danger:active{background:var(--red-d)}
+.audit-line{font-size:11px;color:var(--txt-m);padding:4px 0;font-family:'SF Mono',Monaco,monospace;border-bottom:1px solid var(--border);word-break:break-all}
+.audit-line:last-child{border-bottom:none}
+
+/* ── DESKTOP ADAPTER ── */
+@media(min-width:768px){
+  #app{flex-direction:row;overflow:hidden}
+  #topbar{flex-direction:column;width:200px;min-height:100vh;height:auto;border-bottom:none;border-right:1px solid var(--border);padding:16px;justify-content:flex-start;gap:16px}
+  .brand-name{font-size:18px}
+  .clock{margin-left:0}
+  .tabs{flex:1;flex-direction:column}
+  .tab{padding:20px 24px}
+  #chat-messages{max-width:700px;margin:0 auto;width:100%}
+  #chat-input-bar{max-width:700px;margin:0 auto;border:none;background:transparent;padding:12px 0}
+  #nav{flex-direction:column;width:60px;min-height:100vh;border-top:none;border-left:1px solid var(--border);padding:16px 0;gap:8px}
+  #nav button{padding:12px 0;font-size:8px;gap:6px}
+  #nav button svg{width:24px;height:24px}
+  .msg{max-width:60%}
+  #monitor .mg-card{max-width:500px}
+  #memory .mem-card{max-width:500px}
+  #tools .tool-card{max-width:500px}
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- TOPBAR -->
+  <div id="topbar">
+    <div class="brand">
+      <div class="dot" id="status-dot"></div>
+      <span class="brand-name">VYREN</span>
+    </div>
+    <div class="status-pill" id="status-pill">
+      <span id="status-text">connecting</span>
+    </div>
+    <span class="clock" id="clock"></span>
+  </div>
+
+  <!-- TAB CONTENT -->
+  <div class="tabs">
+
+    <!-- CHAT -->
+    <div class="tab active" id="tab-chat">
+      <div id="chat-messages">
+        <div class="msg system">VYREN ready. Type a message or tap the mic.</div>
+      </div>
+      <div id="chat-input-bar">
+        <button class="mic-btn" id="mic-btn" title="Voice input">
+          <svg viewBox="0 0 24 24"><path d="M12 1a4 4 0 0 0-4 4v7a4 4 0 0 0 8 0V5a4 4 0 0 0-4-4z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+        </button>
+        <textarea id="msg-input" placeholder="Message VYREN..." rows="1"></textarea>
+        <button class="send-btn" id="send-btn" disabled>
+          <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- MONITOR -->
+    <div class="tab" id="tab-monitor">
+      <div id="monitor">
+        <div class="mg-card">
+          <h3>System Resources</h3>
+          <div id="gauges"></div>
+        </div>
+        <div class="mg-card">
+          <h3>System Info</h3>
+          <div class="info-grid" id="sys-info"></div>
+        </div>
+        <div class="mg-card">
+          <h3>Heartbeat</h3>
+          <div id="heartbeat-info"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MEMORY -->
+    <div class="tab" id="tab-memory">
+      <div id="memory">
+        <input type="text" class="mem-search" id="mem-search" placeholder="Search memory...">
+        <div id="mem-list"></div>
+      </div>
+    </div>
+
+    <!-- TOOLS -->
+    <div class="tab" id="tab-tools">
+      <div id="tools">
+        <div id="tools-list"></div>
+      </div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div class="tab" id="tab-settings">
+      <div id="settings">
+        <div class="set-group">
+          <h3>Connection</h3>
+          <div class="set-row"><span class="set-label">Status</span><span class="set-value" id="set-status">—</span></div>
+          <div class="set-row"><span class="set-label">Model</span><span class="set-value" id="set-model">—</span></div>
+          <div class="set-row"><span class="set-label">Ollama</span><span class="set-value" id="set-ollama">—</span></div>
+          <div class="set-row"><span class="set-label">Tools</span><span class="set-value" id="set-tools">—</span></div>
+          <div class="set-row"><span class="set-label">Memory</span><span class="set-value" id="set-mem">—</span></div>
+        </div>
+        <div class="set-group">
+          <h3>Controls</h3>
+          <button class="set-btn danger" id="kill-btn">Activate Kill Switch</button>
+          <button class="set-btn" id="refresh-btn">Refresh Connection</button>
+          <button class="set-btn" id="clear-btn">Clear Chat History</button>
+        </div>
+        <div class="set-group">
+          <h3>Audit Log</h3>
+          <div id="audit-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTTOM NAV -->
+  <div id="nav">
+    <button class="active" data-tab="chat">
+      <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      CHAT
+    </button>
+    <button data-tab="monitor">
+      <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+      MONITOR
+    </button>
+    <button data-tab="memory">
+      <svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
+      MEMORY
+    </button>
+    <button data-tab="tools">
+      <svg viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+      TOOLS
+    </button>
+    <button data-tab="settings">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      MORE
+    </button>
+  </div>
+</div>
+
+<script>
+// ── STATE ──
+let ws = null;
+let currentTab = 'chat';
+let isSending = false;
+let systemData = {};
+let recognition = null;
+let isRecording = false;
+
+// ── ELEMENTS ──
+const $ = id => document.getElementById(id);
+const chatMessages = $('chat-messages');
+const msgInput = $('msg-input');
+const sendBtn = $('send-btn');
+const micBtn = $('mic-btn');
+const statusDot = $('status-dot');
+const statusText = $('status-text');
+const clockEl = $('clock');
+
+// ── CLOCK ──
+function updateClock() {
+  const now = new Date();
+  const h = String(now.getHours()).padStart(2,'0');
+  const m = String(now.getMinutes()).padStart(2,'0');
+  const s = String(now.getSeconds()).padStart(2,'0');
+  clockEl.textContent = `${h}:${m}:${s}`;
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ── TAB NAVIGATION ──
+document.querySelectorAll('#nav button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tab = btn.dataset.tab;
+    if (tab === currentTab) return;
+    document.querySelectorAll('#nav button').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    $('tab-' + tab).classList.add('active');
+    currentTab = tab;
+    // Load data on tab switch
+    if (tab === 'monitor') loadSystem();
+    if (tab === 'memory') loadMemory();
+    if (tab === 'tools') loadTools();
+    if (tab === 'settings') { loadSettings(); loadAudit(); }
+  });
+});
+
+// ── WEBSOCKET ──
+function connect() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const url = `${proto}//${location.host}/ws/chat`;
+  ws = new WebSocket(url);
+
+  ws.onopen = () => {
+    setStatus('on', 'online');
+    addSystemMsg('Connected to VYREN.');
+  };
+  ws.onclose = () => {
+    setStatus('off', 'offline');
+    // Reconnect after 3s
+    setTimeout(connect, 3000);
+  };
+  ws.onerror = () => {};
+  ws.onmessage = (e) => {
+    const data = JSON.parse(e.data);
+    handleMessage(data);
+  };
+}
+
+function setStatus(state, text) {
+  statusDot.className = 'dot ' + (state === 'on' ? 'on' : state === 'wait' ? 'wait' : 'off');
+  statusText.textContent = text;
+}
+
+// ── CHAT ──
+function handleMessage(data) {
+  switch(data.type) {
+    case 'chunk':
+      appendToLastVyren(data.text);
+      break;
+    case 'tool_call':
+      addToolMsg(data.name, data.args);
+      break;
+    case 'tool_result':
+      addSystemMsg(`${data.name}: ${data.result}`);
+      break;
+    case 'tool_declined':
+      addSystemMsg(`${data.name} declined.`);
+      break;
+    case 'confirmation_required':
+      showConfirmation(data.name, data.args);
+      break;
+    case 'done':
+      isSending = false;
+      sendBtn.disabled = true;
+      removeTyping();
+      scrollToBottom();
+      break;
+    case 'error':
+      addSystemMsg('Error: ' + data.message);
+      isSending = false;
+      sendBtn.disabled = true;
+      removeTyping();
+      break;
+  }
+}
+
+function sendMessage() {
+  const text = msgInput.value.trim();
+  if (!text || isSending) return;
+  isSending = true;
+  sendBtn.disabled = true;
+  addUserMsg(text);
+  msgInput.value = '';
+  msgInput.style.height = 'auto';
+  addTyping();
+  ws.send(JSON.stringify({ type: 'message', text }));
+}
+
+function addUserMsg(text) {
+  const div = document.createElement('div');
+  div.className = 'msg user';
+  div.textContent = text;
+  chatMessages.appendChild(div);
+  scrollToBottom();
+}
+
+let lastVyrenEl = null;
+let vyrenTextBuffer = '';
+
+function appendToLastVyren(text) {
+  vyrenTextBuffer += text;
+  if (!lastVyrenEl) {
+    lastVyrenEl = document.createElement('div');
+    lastVyrenEl.className = 'msg vyren';
+    chatMessages.appendChild(lastVyrenEl);
+    removeTyping();
+  }
+  lastVyrenEl.innerHTML = formatVyrenText(vyrenTextBuffer);
+  scrollToBottom();
+}
+
+function formatVyrenText(text) {
+  // Basic markdown-like formatting
+  return text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/`(.+?)`/g, '<code style="background:var(--bg);padding:1px 5px;border-radius:3px;font-size:12px">$1</code>')
+    .replace(/\n/g, '<br>');
+}
+
+function addSystemMsg(text) {
+  const div = document.createElement('div');
+  div.className = 'msg system';
+  div.textContent = text;
+  chatMessages.appendChild(div);
+  scrollToBottom();
+}
+
+function addToolMsg(name, args) {
+  const argStr = Object.entries(args || {}).map(([k,v]) => `${k}=${typeof v === 'string' ? v : JSON.stringify(v)}`).join(', ');
+  const div = document.createElement('div');
+  div.className = 'msg tool-call';
+  div.textContent = `Running: ${name}(${argStr})`;
+  chatMessages.appendChild(div);
+  scrollToBottom();
+}
+
+function showConfirmation(name, args) {
+  const argStr = Object.entries(args || {}).map(([k,v]) => `${k}: ${v}`).join('\n');
+  const div = document.createElement('div');
+  div.className = 'msg confirm';
+  div.innerHTML = `
+    <div style="font-weight:600;margin-bottom:6px">VYREN wants to:</div>
+    <div style="font-family:monospace;font-size:12px;color:var(--amber);margin-bottom:4px">${name}</div>
+    <div style="font-size:12px;white-space:pre-wrap;margin-bottom:8px">${argStr}</div>
+    <div class="confirm-actions">
+      <button class="btn-approve" data-approve="true">Allow</button>
+      <button class="btn-decline" data-approve="false">Decline</button>
+    </div>
+  `;
+  chatMessages.appendChild(div);
+  scrollToBottom();
+
+  div.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const approved = btn.dataset.approve === 'true';
+      ws.send(JSON.stringify({ type: 'confirmation', approved }));
+      div.remove();
+      addSystemMsg(approved ? `${name} approved.` : `${name} declined.`);
+    });
+  });
+}
+
+function addTyping() {
+  const existing = document.querySelector('.typing-indicator');
+  if (existing) return;
+  const div = document.createElement('div');
+  div.className = 'msg vyren typing-indicator';
+  div.innerHTML = '<div class="typing"><span></span><span></span><span></span></div>';
+  chatMessages.appendChild(div);
+  scrollToBottom();
+}
+
+function removeTyping() {
+  const el = document.querySelector('.typing-indicator');
+  if (el) el.remove();
+}
+
+function scrollToBottom() {
+  requestAnimationFrame(() => {
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  });
+}
+
+// Input handling
+msgInput.addEventListener('input', () => {
+  sendBtn.disabled = !msgInput.value.trim() || isSending;
+  // Auto-resize
+  msgInput.style.height = 'auto';
+  msgInput.style.height = Math.min(msgInput.scrollHeight, 100) + 'px';
+});
+
+msgInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+sendBtn.addEventListener('click', sendMessage);
+
+// ── VOICE INPUT (Web Speech API) ──
+if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+  const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  recognition = new SpeechRec();
+  recognition.continuous = false;
+  recognition.interimResults = false;
+  recognition.lang = 'en-US';
+
+  recognition.onresult = (e) => {
+    const text = e.results[0][0].transcript;
+    msgInput.value = text;
+    sendBtn.disabled = false;
+    stopRecording();
+  };
+  recognition.onerror = () => stopRecording();
+  recognition.onend = () => stopRecording();
+}
+
+micBtn.addEventListener('click', () => {
+  if (!recognition) {
+    addSystemMsg('Voice input not supported in this browser. Use Safari on iPhone.');
+    return;
+  }
+  if (isRecording) {
+    stopRecording();
+  } else {
+    startRecording();
+  }
+});
+
+function startRecording() {
+  isRecording = true;
+  micBtn.classList.add('recording');
+  try { recognition.start(); } catch(e) {}
+}
+
+function stopRecording() {
+  isRecording = false;
+  micBtn.classList.remove('recording');
+  try { recognition.stop(); } catch(e) {}
+}
+
+// ── REST DATA LOADERS ──
+async function fetchJSON(url) {
+  try {
+    const r = await fetch(url);
+    return await r.json();
+  } catch { return null; }
+}
+
+async function loadSystem() {
+  const d = await fetchJSON('/api/system');
+  if (!d) return;
+  systemData = d;
+
+  // Gauges
+  const gauges = $('gauges');
+  gauges.innerHTML = buildGauge('CPU', d.cpu_percent, 90) +
+    buildGauge('RAM', d.memory_percent, 90) +
+    buildGauge('Disk', d.disk_percent, 95) +
+    (d.battery_percent != null ? buildGauge('Battery', d.battery_percent, 20, true) : '');
+
+  // Info grid
+  $('sys-info').innerHTML =
+    infoCell('OS', d.os || '—') +
+    infoCell('Host', d.hostname || '—') +
+    infoCell('Cores', d.cpu_cores || '—') +
+    infoCell('RAM', `${d.memory_used_gb}/${d.memory_total_gb} GB`) +
+    infoCell('Disk Free', `${d.disk_free_gb}/${d.disk_total_gb} GB`) +
+    (d.battery_percent != null ? infoCell('Battery', `${d.battery_percent}%${d.battery_charging ? ' (charging)' : ''}`) : '');
+
+  // Heartbeat
+  const hb = await fetchJSON('/api/heartbeat');
+  $('heartbeat-info').innerHTML = `
+    <div class="set-row"><span class="set-label">Status</span><span class="set-value">${hb?.running ? 'Running' : 'Stopped'}</span></div>
+    <div class="set-row"><span class="set-label">Pending Notices</span><span class="set-value">${hb?.pending_notices || 0}</span></div>
+    <div class="set-row"><span class="set-label">Checks</span><span class="set-value">${hb?.checks_configured || 0}</span></div>
+  `;
+}
+
+function buildGauge(label, value, warn, invert = false) {
+  let color = 'var(--green)';
+  if (invert) {
+    if (value < warn) color = 'var(--red)';
+    else if (value < warn + 20) color = 'var(--amber)';
+  } else {
+    if (value > warn) color = 'var(--red)';
+    else if (value > warn - 15) color = 'var(--amber)';
+  }
+  return `<div class="gauge-row">
+    <span class="gauge-label">${label}</span>
+    <div class="gauge-bar"><div class="gauge-fill" style="width:${Math.min(value,100)}%;background:${color}"></div></div>
+    <span class="gauge-val">${value}%</span>
+  </div>`;
+}
+
+function infoCell(label, value) {
+  return `<div class="info-cell"><div class="label">${label}</div><div class="value">${value}</div></div>`;
+}
+
+async function loadMemory() {
+  const data = await fetchJSON('/api/memory');
+  const list = $('mem-list');
+  if (!data || data.length === 0) {
+    list.innerHTML = '<div class="mem-empty">No memories stored yet.<br>VYREN will remember things as you talk.</div>';
+    return;
+  }
+  list.innerHTML = data.map(m =>
+    `<div class="mem-card"><div class="mem-key">${esc(m.key)}</div><div class="mem-val">${esc(m.value)}</div></div>`
+  ).join('');
+}
+
+$('mem-search')?.addEventListener('input', (e) => {
+  const q = e.target.value.toLowerCase();
+  document.querySelectorAll('.mem-card').forEach(card => {
+    const text = card.textContent.toLowerCase();
+    card.style.display = text.includes(q) ? '' : 'none';
+  });
+});
+
+async function loadTools() {
+  const data = await fetchJSON('/api/tools');
+  if (!data) return;
+  $('tools-list').innerHTML = data.map(t =>
+    `<div class="tool-card">
+      <div class="tool-icon ${t.safety_level === 'safe' ? 'safe' : 'warn'}">
+        ${t.safety_level === 'safe' ? '&#10003;' : '&#9888;'}
+      </div>
+      <div class="tool-info">
+        <div class="tool-name">${esc(t.name)}</div>
+        <div class="tool-desc">${esc(t.description)}</div>
+        <span class="tool-badge ${t.safety_level}">${t.safety_level}</span>
+      </div>
+    </div>`
+  ).join('');
+}
+
+async function loadSettings() {
+  const d = systemData;
+  $('set-status').textContent = ws?.readyState === 1 ? 'Connected' : 'Disconnected';
+  $('set-model').textContent = 'gemini-2.5-flash';
+  $('set-ollama').textContent = d.ollama_available ? 'Available' : 'Not running';
+  $('set-tools').textContent = d.tool_count + ' loaded';
+  $('set-mem').textContent = d.memory_entries + ' entries';
+}
+
+async function loadAudit() {
+  const data = await fetchJSON('/api/audit?limit=30');
+  if (!data?.entries) return;
+  $('audit-list').innerHTML = data.entries
+    .reverse()
+    .map(l => `<div class="audit-line">${esc(l)}</div>`)
+    .join('');
+}
+
+// Settings actions
+$('kill-btn')?.addEventListener('click', () => {
+  // Send as a chat command
+  if (ws?.readyState === 1) {
+    ws.send(JSON.stringify({ type: 'message', text: '/kill' }));
+    addSystemMsg('Kill switch activated.');
+  }
+});
+
+$('refresh-btn')?.addEventListener('click', () => {
+  if (ws) ws.close();
+  connect();
+});
+
+$('clear-btn')?.addEventListener('click', () => {
+  chatMessages.innerHTML = '<div class="msg system">Chat cleared.</div>';
+  lastVyrenEl = null;
+  vyrenTextBuffer = '';
+});
+
+function esc(s) {
+  if (!s) return '';
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// ── AUTO-REFRESH MONITOR ──
+setInterval(() => {
+  if (currentTab === 'monitor') loadSystem();
+}, 5000);
+
+// ── SERVICE WORKER REGISTRATION ──
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
+
+// ── INIT ──
+connect();
+</script>
+</body>
+</html>
