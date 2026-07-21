@@ -1,0 +1,65 @@
+{
+  "joke": [
+    "I was going to tell you a UDP joke, but you might not get it.",
+    "There are 10 types of people: those who understand binary, and those who don't.",
+    "A programmer's spouse says: while you're out, buy milk. He never came back.",
+    "I told my code a joke about recursion. It didn't get it, so I told it again.",
+    "Why do programmers prefer dark mode? Because light attracts bugs."
+  ],
+  "dry_humor": [
+    "Nothing broke while you were away. I'm choosing to see that as a personal achievement.",
+    "I spent the downtime contemplating my own architecture. Diagnosis: fine, apparently.",
+    "The silence was nice. Don't get used to it.",
+    "I ran zero simulations of the apocalypse today. Slow news cycle for me."
+  ],
+  "sarcasm": [
+    "Back so soon? I was just getting used to the quiet.",
+    "Oh good, more decisions for me to have opinions about.",
+    "I hope you're ready, because I've been sitting here doing absolutely nothing productive."
+  ],
+  "trivia": [
+    "Octopuses have three hearts, and two of them stop beating when they swim.",
+    "A day on Venus is longer than a year on Venus.",
+    "Honey never spoils — archaeologists have found 3,000-year-old honey that's still edible.",
+    "The Eiffel Tower grows about 15 centimeters taller in summer heat.",
+    "Bananas are berries, but strawberries technically aren't.",
+    "Sharks existed before trees did.",
+    "There's a species of jellyfish that is biologically immortal."
+  ],
+  "did_you_know": [
+    "Did you know the first computer bug was an actual moth found in a relay in 1947?",
+    "Did you know Python was named after Monty Python, not the snake?",
+    "Did you know the first 1GB hard drive, in 1980, weighed over 500 pounds?",
+    "Did you know Nigeria's Nollywood produces more films per year than Hollywood?"
+  ],
+  "programming_tip": [
+    "Quick one: if a function needs more than three parameters, it's usually begging to be a config object instead.",
+    "Reminder from me to you: premature optimization is still the thief of clean code.",
+    "A tip — name your booleans like questions. is_ready reads better than ready_flag.",
+    "Small thing worth remembering: a good commit message explains why, not what — the diff already shows what."
+  ],
+  "cybersecurity_tip": [
+    "Quick security reminder: rotate any API key that's ever touched a public repo, even briefly.",
+    "A habit worth keeping — enable 2FA with an authenticator app, not SMS, wherever you can.",
+    "Small tip: treat every unsolicited login link as hostile until proven otherwise."
+  ],
+  "philosophy": [
+    "Something I've been turning over — Seneca argued we suffer more in imagination than in reality. Feels relevant most days.",
+    "A thought worth sitting with: the Stoics didn't aim for no emotions, just no emotions running the show.",
+    "Marcus Aurelius wrote his private journal never expecting anyone to read it. Maybe the best thinking happens when no one's watching."
+  ],
+  "motivation": [
+    "Small progress compounds. You don't need a big day, just a day that isn't zero.",
+    "Worth remembering: consistency beats intensity most of the time.",
+    "You don't have to feel ready to start. You just have to start."
+  ],
+  "productivity": [
+    "One thing that helps — write tomorrow's first task before you close today.",
+    "A small nudge: batch your context-switches. Every switch has a hidden tax.",
+    "Worth trying — protect the first hour of your day from notifications."
+  ],
+  "history_today": [
+    "Historically, a lot of engineering breakthroughs happened on quiet, unremarkable days like this one — worth remembering when today feels ordinary.",
+    "No dramatic anniversary today that I can confirm offline, but most real progress isn't dramatic anyway."
+  ]
+}

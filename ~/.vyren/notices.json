@@ -1,0 +1,394 @@
+[
+  {
+    "id": "memory_monitor_1782721056",
+    "timestamp": "2026-06-29T08:17:36.732460+00:00",
+    "check": "memory_monitor",
+    "message": "RAM at 96.5% (threshold 90%)",
+    "urgency": "medium",
+    "dismissed": false
+  },
+  {
+    "id": "disk_monitor_1782721056",
+    "timestamp": "2026-06-29T08:17:36.735720+00:00",
+    "check": "disk_monitor",
+    "message": "Disk at 96.1%, only 18.3GB free",
+    "urgency": "low",
+    "dismissed": false
+  },
+  {
+    "id": "disk_monitor_1782721359",
+    "timestamp": "2026-06-29T08:22:39.306707+00:00",
+    "check": "disk_monitor",
+    "message": "Disk at 96.0%, only 18.6GB free",
+    "urgency": "low",
+    "dismissed": false
+  },
+  {
+    "id": "memory_monitor_1782721661",
+    "timestamp": "2026-06-29T08:27:41.533892+00:00",
+    "check": "memory_monitor",
+    "message": "RAM at 97.9% (threshold 90%)",
+    "urgency": "medium",
+    "dismissed": false
+  },
+  {
+    "id": "disk_monitor_1782721661",
+    "timestamp": "2026-06-29T08:27:41.654932+00:00",
+    "check": "disk_monitor",
+    "message": "Disk at 96.0%, only 18.5GB free",
+    "urgency": "low",
+    "dismissed": false
+  },
+  {
+    "id": "memory_monitor_1782721962",
+    "timestamp": "2026-06-29T08:32:42.842485+00:00",
+    "check": "memory_monitor",
+    "message": "RAM at 92.7% (threshold 90%)",
+    "urgency": "medium",
+    "dismissed": false
+  },
+  {
+    "id": "disk_monitor_1782721962",
+    "timestamp": "2026-06-29T08:32:42.857201+00:00",
+    "check": "disk_monitor",
+    "message": "Disk at 96.0%, only 18.5GB free",
+    "urgency": "low",
+    "dismissed": false
+  },
+  {
+    "id": "memory_monitor_1782722264",
+    "timestamp": "2026-06-29T08:37:44.064358+00:00",
+    "check": "memory_monitor",
+    "message": "RAM at 93.5% (threshold 90%)",
+    "urgency": "medium",
+    "dismissed": false
+  },
+  {
+    "id": "disk_monitor_1782722264",
+    "timestamp": "2026-06-29T08:37:44.092243+00:00",
+    "check": "disk_monitor",
+    "message": "Disk at 96.0%, only 18.5GB free",
+    "urgency": "low",
+    "dismissed": false
+  },
+  {
+    "id": "memory_monitor_1782722567",
+    "timestamp": "2026-06-29T08:42:47.084237+00:00",
+    "check": "memory_monitor",
+    "message": "RAM at 92.2% (threshold 90%)",
+    "urgency": "medium",
+    "dismissed": false
+  },
+  {
+    "id": "disk_monitor_1782722569",
+    "timestamp": "2026-06-29T08:42:49.367265+00:00",
+    "check": "disk_monitor",
+    "message": "Disk at 96.0%, only 18.4GB free",
+    "urgency": "low",
+    "dismissed": false
+  },
+  {
+    "id": "memory_monitor_1782722870",
+    "timestamp": "2026-06-29T08:47:50.529824+00:00",
+    "check": "memory_monitor",
+    "message": "RAM at 92.6% (threshold 90%)",
+    "urgency": "medium",
+    "dismissed": false
+  },
+  {
+    "id": "disk_monitor_1782722870",
+    "timestamp": "2026-06-29T08:47:50.535927+00:00",
+    "check": "disk_monitor",
+    "message": "Disk at 96.0%, only 18.8GB free",
+    "urgency": "low",
+    "dismissed": false
+  },
+  {
+    "id": "memory_monitor_1782723171",
+    "timestamp": "2026-06-29T08:52:51.782255+00:00",
+    "check": "memory_monitor",
+    "message": "RAM at 94.0% (threshold 90%)",
+    "urgency": "medium",
+    "dismissed": false
+  },
+  {
+    "id": "disk_monitor_1782723171",
+    "timestamp": "2026-06-29T08:52:51.787422+00:00",
+    "check": "disk_monitor",
+    "message": "Disk at 96.0%, only 18.8GB free",
+    "urgency": "low",
+    "dismissed": false
+  },
+  {
+    "id": "memory_monitor_1782723473",
+    "timestamp": "2026-06-29T08:57:53.275584+00:00",
+    "check": "memory_monitor",
+    "message": "RAM at 96.4% (threshold 90%)",
+    "urgency": "medium",
+    "dismissed": false
+  },
+  {
+    "id": "disk_monitor_1782723473",
+    "timestamp": "2026-06-29T08:57:53.312394+00:00",
+    "check": "disk_monitor",
+    "message": "Disk at 95.9%, only 19.0GB free",
+    "urgency": "low",
+    "dismissed": false
+  },
+  {
+    "id": "memory_monitor_1782724023",
+    "timestamp": "2026-06-29T09:07:03.113681+00:00",
+    "check": "memory_monitor",
+    "message": "RAM at 94.3% (threshold 90%)",
+    "urgency": "medium",
+    "dismissed": false
+  },
+  {
+    "id": "disk_monitor_1782724023",
+    "timestamp": "2026-06-29T09:07:03.116453+00:00",
+    "check": "disk_monitor",
+    "message": "Disk at 95.9%, only 19.0GB free",
+    "urgency": "low",
+    "dismissed": false
+  },
+  {
+    "id": "memory_monitor_1782724935",
+    "timestamp": "2026-06-29T09:22:15.147640+00:00",
+    "check": "memory_monitor",
+    "message": "RAM at 94.6% (threshold 90%)",
+    "urgency": "medium",
+    "dismissed": false
+  },
+  {
+    "id": "disk_monitor_1782724935",
+    "timestamp": "2026-06-29T09:22:15.153749+00:00",
+    "check": "disk_monitor",
+    "message": "Disk at 95.8%, only 19.3GB free",
+    "urgency": "low",
+    "dismissed": false
+  },
+  {
+    "id": "disk_monitor_1782725236",
+    "timestamp": "2026-06-29T09:27:16.383339+00:00",
+    "check": "disk_monitor",
+    "message": "Disk at 95.8%, only 19.6GB free",
+    "urgency": "low",
+    "dismissed": false
+  },
+  {
+    "id": "disk_monitor_1782725537",
+    "timestamp": "2026-06-29T09:32:17.569183+00:00",
+    "check": "disk_monitor",
+    "message": "Disk at 95.8%, only 19.6GB free",
+    "urgency": "low",
+    "dismissed": false
+  },
+  {
+    "id": "disk_monitor_1782725838",
+    "timestamp": "2026-06-29T09:37:18.748645+00:00",
+    "check": "disk_monitor",
+    "message": "Disk at 95.8%, only 19.6GB free",
+    "urgency": "low",
+    "dismissed": false
+  },
+  {
+    "id": "memory_monitor_1782726140",
+    "timestamp": "2026-06-29T09:42:20.031698+00:00",
+    "check": "memory_monitor",
+    "message": "RAM at 92.7% (threshold 90%)",
+    "urgency": "medium",
+    "dismissed": false
+  },
+  {
+    "id": "disk_monitor_1782726140",
+    "timestamp": "2026-06-29T09:42:20.045208+00:00",
+    "check": "disk_monitor",
+    "message": "Disk at 95.8%, only 19.6GB free",
+    "urgency": "low",
+    "dismissed": false
+  },
+  {
+    "id": "memory_monitor_1782726441",
+    "timestamp": "2026-06-29T09:47:21.304135+00:00",
+    "check": "memory_monitor",
+    "message": "RAM at 94.5% (threshold 90%)",
+    "urgency": "medium",
+    "dismissed": false
+  },
+  {
+    "id": "disk_monitor_1782726441",
+    "timestamp": "2026-06-29T09:47:21.322477+00:00",
+    "check": "disk_monitor",
+    "message": "Disk at 95.8%, only 19.5GB free",
+    "urgency": "low",
+    "dismissed": false
+  },
+  {
+    "id": "disk_monitor_1782726742",
+    "timestamp": "2026-06-29T09:52:22.574693+00:00",
+    "check": "disk_monitor",
+    "message": "Disk at 95.8%, only 19.5GB free",
+    "urgency": "low",
+    "dismissed": false
+  },
+  {
+    "id": "memory_monitor_1782728893",
+    "timestamp": "2026-06-29T10:28:13.473132+00:00",
+    "check": "memory_monitor",
+    "message": "RAM at 94.9% (threshold 90%)",
+    "urgency": "medium",
+    "dismissed": false
+  },
+  {
+    "id": "memory_monitor_1782732718",
+    "timestamp": "2026-06-29T11:31:58.693535+00:00",
+    "check": "memory_monitor",
+    "message": "RAM at 94.6% (threshold 90%)",
+    "urgency": "medium",
+    "dismissed": false
+  },
+  {
+    "id": "memory_monitor_1782732924",
+    "timestamp": "2026-06-29T11:35:24.830486+00:00",
+    "check": "memory_monitor",
+    "message": "RAM at 94.8% (threshold 90%)",
+    "urgency": "medium",
+    "dismissed": false
+  },
+  {
+    "id": "memory_monitor_1782733225",
+    "timestamp": "2026-06-29T11:40:25.989857+00:00",
+    "check": "memory_monitor",
+    "message": "RAM at 91.2% (threshold 90%)",
+    "urgency": "medium",
+    "dismissed": false
+  },
+  {
+    "id": "memory_monitor_1782734430",
+    "timestamp": "2026-06-29T12:00:30.776735+00:00",
+    "check": "memory_monitor",
+    "message": "RAM at 94.3% (threshold 90%)",
+    "urgency": "medium",
+    "dismissed": false
+  },
+  {
+    "id": "memory_monitor_1782734976",
+    "timestamp": "2026-06-29T12:09:36.264739+00:00",
+    "check": "memory_monitor",
+    "message": "RAM at 90.2% (threshold 90%)",
+    "urgency": "medium",
+    "dismissed": false
+  },
+  {
+    "id": "memory_monitor_1782735579",
+    "timestamp": "2026-06-29T12:19:39.016335+00:00",
+    "check": "memory_monitor",
+    "message": "RAM at 94.2% (threshold 90%)",
+    "urgency": "medium",
+    "dismissed": false
+  },
+  {
+    "id": "memory_monitor_1782736181",
+    "timestamp": "2026-06-29T12:29:41.780884+00:00",
+    "check": "memory_monitor",
+    "message": "RAM at 92.2% (threshold 90%)",
+    "urgency": "medium",
+    "dismissed": false
+  },
+  {
+    "id": "memory_monitor_1782736483",
+    "timestamp": "2026-06-29T12:34:43.100433+00:00",
+    "check": "memory_monitor",
+    "message": "RAM at 94.9% (threshold 90%)",
+    "urgency": "medium",
+    "dismissed": false
+  },
+  {
+    "id": "disk_monitor_1782736483",
+    "timestamp": "2026-06-29T12:34:43.126853+00:00",
+    "check": "disk_monitor",
+    "message": "Disk at 95.1%, only 22.9GB free",
+    "urgency": "low",
+    "dismissed": false
+  },
+  {
+    "id": "memory_monitor_1782736784",
+    "timestamp": "2026-06-29T12:39:44.292159+00:00",
+    "check": "memory_monitor",
+    "message": "RAM at 91.3% (threshold 90%)",
+    "urgency": "medium",
+    "dismissed": false
+  },
+  {
+    "id": "disk_monitor_1782736784",
+    "timestamp": "2026-06-29T12:39:44.309070+00:00",
+    "check": "disk_monitor",
+    "message": "Disk at 95.1%, only 22.8GB free",
+    "urgency": "low",
+    "dismissed": false
+  },
+  {
+    "id": "memory_monitor_1782737085",
+    "timestamp": "2026-06-29T12:44:45.469083+00:00",
+    "check": "memory_monitor",
+    "message": "RAM at 92.0% (threshold 90%)",
+    "urgency": "medium",
+    "dismissed": false
+  },
+  {
+    "id": "disk_monitor_1782737085",
+    "timestamp": "2026-06-29T12:44:45.487300+00:00",
+    "check": "disk_monitor",
+    "message": "Disk at 95.1%, only 22.8GB free",
+    "urgency": "low",
+    "dismissed": false
+  },
+  {
+    "id": "disk_monitor_1782737386",
+    "timestamp": "2026-06-29T12:49:46.628458+00:00",
+    "check": "disk_monitor",
+    "message": "Disk at 95.1%, only 22.8GB free",
+    "urgency": "low",
+    "dismissed": false
+  },
+  {
+    "id": "disk_monitor_1782737687",
+    "timestamp": "2026-06-29T12:54:47.769052+00:00",
+    "check": "disk_monitor",
+    "message": "Disk at 95.1%, only 22.8GB free",
+    "urgency": "low",
+    "dismissed": false
+  },
+  {
+    "id": "disk_monitor_1782737988",
+    "timestamp": "2026-06-29T12:59:48.990776+00:00",
+    "check": "disk_monitor",
+    "message": "Disk at 95.1%, only 22.8GB free",
+    "urgency": "low",
+    "dismissed": false
+  },
+  {
+    "id": "cpu_monitor_1782848256",
+    "timestamp": "2026-06-30T19:37:36.714641+00:00",
+    "check": "cpu_monitor",
+    "message": "CPU at 100.0% (threshold 90%)",
+    "urgency": "high",
+    "dismissed": false
+  },
+  {
+    "id": "memory_monitor_1782848257",
+    "timestamp": "2026-06-30T19:37:37.058697+00:00",
+    "check": "memory_monitor",
+    "message": "RAM at 94.3% (threshold 90%)",
+    "urgency": "medium",
+    "dismissed": false
+  },
+  {
+    "id": "battery_monitor_1782848257",
+    "timestamp": "2026-06-30T19:37:37.312026+00:00",
+    "check": "battery_monitor",
+    "message": "Battery at 10%, not charging",
+    "urgency": "high",
+    "dismissed": false
+  }
+]

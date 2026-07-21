@@ -30,8 +30,27 @@ F = TypeVar("F", bound=Callable)
 # ---------------------------------------------------------------------------
 
 def setup_logging(level: str = "INFO", log_file: str | None = None) -> logging.Logger:
-    """Configure structured logging for all VYREN modules."""
+    """Configure structured logging for all VYREN modules.
+    
+    FIX (2026-07-16): Force UTF-8 encoding on all handlers to prevent
+    UnicodeEncodeError on Windows console (cp1252) when transcripts contain
+    non-ASCII characters (Korean, CJK, emoji, accented text from STT).
+    
+    Before this fix, logging.StreamHandler() inherited the platform's default
+    console encoding (cp1252 on legacy Windows terminals), which crashed with:
+      --- Logging error ---
+      UnicodeEncodeError: 'charmap' codec can't encode characters in position X-Y
+    """
+    import sys
     from pathlib import Path
+
+    # Ensure stdout/stderr support UTF-8 output (Windows fix)
+    if sys.platform == "win32":
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, OSError):
+            pass  # Python < 3.7 or redirected streams — fall back to handler-level fix
 
     root = logging.getLogger("vyren")
     root.setLevel(getattr(logging, level.upper(), logging.INFO))
@@ -40,14 +59,25 @@ def setup_logging(level: str = "INFO", log_file: str | None = None) -> logging.L
         "[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
-    handler = logging.StreamHandler()
+    
+    # Console handler — explicit UTF-8 with errors='replace' fallback
+    handler = logging.StreamHandler(sys.stderr)
     handler.setFormatter(fmt)
+    # Force UTF-8 encoding on the handler stream (works even when 
+    # sys.stdout.reconfigure fails or isn't available)
+    try:
+        handler.stream = open(
+            handler.stream.fileno(), mode="w", 
+            encoding="utf-8", errors="replace", buffering=1,
+            closefd=False,
+        )
+    except (OSError, AttributeError):
+        pass  # Keep default stream if we can't wrap it
     root.addHandler(handler)
 
     if log_file:
-        from pathlib import Path
         Path(log_file).parent.mkdir(parents=True, exist_ok=True)
-        file_handler = logging.FileHandler(log_file)
+        file_handler = logging.FileHandler(log_file, encoding="utf-8", errors="replace")
         file_handler.setFormatter(fmt)
         root.addHandler(file_handler)
 
@@ -68,6 +98,8 @@ class RetryPolicy:
     jitter: bool = True             # Add randomness to prevent thundering herd
     retryable_exceptions: tuple = (Exception,)
 
+    # Exclude non-retryable exceptions
+    _NON_RETRYABLE = (KeyboardInterrupt, SystemExit, GeneratorExit)
 
 def with_retry(policy: RetryPolicy | None = None):
     """Decorator that retries a function on failure."""
@@ -80,6 +112,8 @@ def with_retry(policy: RetryPolicy | None = None):
             for attempt in range(_policy.max_retries + 1):
                 try:
                     return fn(*args, **kwargs)
+                except _NON_RETRYABLE:
+                    raise
                 except _policy.retryable_exceptions as e:
                     last_exc = e
                     if attempt == _policy.max_retries:
@@ -95,7 +129,9 @@ def with_retry(policy: RetryPolicy | None = None):
                         f"for {fn.__name__}: {e}. Waiting {delay:.1f}s"
                     )
                     time.sleep(delay)
-            raise last_exc  # type: ignore
+            if last_exc is not None:
+                raise last_exc  # type: ignore
+            raise RuntimeError(f"{fn.__name__} failed with no retries configured")
         return wrapper  # type: ignore
     return decorator
 
