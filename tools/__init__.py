@@ -201,7 +201,7 @@ def create_registry(
 
     registry = ToolRegistry()
 
-    register_memory(registry, memory_store)
+    register_memory(registry, memory_v2)
     register_system(registry)
     register_file(registry)
     register_web(registry)
@@ -232,6 +232,24 @@ def create_registry(
         register_screen(registry)
     except Exception as e:
         logger.warning("Screen tools not loaded: %s", e)
+
+    try:
+        from tools.computer_tools import register as register_computer
+        register_computer(registry)
+    except Exception as e:
+        logger.warning("Computer tools not loaded: %s", e)
+
+    try:
+        from tools.filesystem_tools import register as register_filesystem
+        register_filesystem(registry)
+    except Exception as e:
+        logger.warning("Filesystem tools not loaded: %s", e)
+
+    try:
+        from tools.agent_tools import register as register_agent
+        register_agent(registry)
+    except Exception as e:
+        logger.warning("Agent tools not loaded: %s", e)
 
     # Log final tool count (helps diagnose 1007 errors)
     names = registry.tool_names()

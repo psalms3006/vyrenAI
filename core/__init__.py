@@ -167,7 +167,7 @@ class VYRENCtx:
         from provider import _ollama_available
         self.health.register("gemini_api", lambda: self.gemini_breaker.state.value == "closed")
         self.health.register("event_bus", lambda: self.event_bus.subscriber_count() is not None)
-        self.health.register("memory", lambda: self.memory.count() >= 0)
+        self.health.register("memory", lambda: self.memory_v2.count() >= 0)
         self.health.register("knowledge_graph", lambda: self.knowledge_graph.entity_count >= 0)
         self.health.register("scheduler", lambda: not self.scheduler.is_running or True)
 

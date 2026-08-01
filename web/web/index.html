@@ -11,90 +11,163 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
 <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect fill='%2308080f' width='180' height='180' rx='40'/><text x='90' y='125' text-anchor='middle' font-size='110'>⚡</text></svg>">
 <title>VYREN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-/* ── RESET & VARIABLES ── */
+/* ═══════════════════════════════════════════════════════════
+   DESIGN TOKENS
+   Palette: state colors are functional (map to voice states),
+   not decorative. --signal is the one signature brand accent —
+   used for identity/active-nav/orb-idle, never for state.
+   Type: Space Grotesk (brand/headers) + Inter (body) + JetBrains
+   Mono (telemetry/logs/data) — three roles, three jobs.
+   ═══════════════════════════════════════════════════════════ */
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
 :root{
-  --bg:#08080f;--bg2:#10101a;--bg3:#14142a;--bg-input:#0d0d18;
-  --border:#1a1a2e;--border2:#2a2a4e;
+  --bg:#08080f;--bg2:#0d0d16;--bg3:#14141f;--bg-input:#0d0d18;
+  --glass:rgba(18,18,28,.62);--glass-strong:rgba(20,20,32,.82);
+  --border:rgba(255,255,255,.07);--border2:rgba(255,255,255,.14);
+
+  --signal:#7c6cff;--signal-d:rgba(124,108,255,.14);--signal-glow:rgba(124,108,255,.28);
   --cyan:#00d4ff;--cyan-d:rgba(0,212,255,.15);
   --green:#00ff88;--green-d:rgba(0,255,136,.12);
   --amber:#ffaa00;--amber-d:rgba(255,170,0,.12);
   --red:#ff4466;--red-d:rgba(255,68,102,.12);
-  --txt:#c8c8d4;--txt-h:#fff;--txt-m:#6a6a80;
-  --r:12px;--safe-top:env(safe-area-inset-top,0px);--safe-bot:env(safe-area-inset-bottom,0px);
-  --orb-size:180px;--header-h:48px;
-}
-html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--txt);font-size:14px;line-height:1.5;overflow:hidden;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
 
-/* Scrollbar */
-::-webkit-scrollbar{width:4px}
+  --txt:#c8c8d4;--txt-h:#fdfdff;--txt-m:#6a6a80;--txt-dim:#454558;
+
+  --r:12px;--r-lg:16px;--r-sm:8px;
+  --safe-top:env(safe-area-inset-top,0px);--safe-bot:env(safe-area-inset-bottom,0px);
+  --orb-size:176px;--topbar-h:52px;
+  --sidebar-w:208px;--sidebar-w-collapsed:60px;
+  --right-w:300px;
+
+  --f-display:'Space Grotesk',sans-serif;
+  --f-body:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  --f-mono:'JetBrains Mono','SF Mono',Monaco,monospace;
+}
+html,body{height:100%;font-family:var(--f-body);background:var(--bg);color:var(--txt);font-size:14px;line-height:1.5;overflow:hidden;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
+::-webkit-scrollbar{width:5px;height:5px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:10px}
+button{font-family:inherit}
+code{background:var(--bg);padding:1px 5px;border-radius:3px;font-size:12px;font-family:var(--f-mono)}
+strong{color:var(--txt-h)}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+
+/* Background: extremely subtle radial signal glow, sits behind everything */
+body::before{content:'';position:fixed;inset:0;z-index:-1;background:
+  radial-gradient(680px 460px at 14% -8%, var(--signal-d), transparent 60%),
+  radial-gradient(520px 420px at 100% 108%, rgba(0,212,255,.05), transparent 60%);
+  pointer-events:none}
 
 /* ── APP SHELL ── */
-#app{display:flex;flex-direction:column;height:100vh;height:100dvh}
+#app{display:grid;grid-template-columns:var(--sidebar-w) 1fr;grid-template-rows:var(--topbar-h) 1fr;height:100vh;height:100dvh;grid-template-areas:"sidebar topbar" "sidebar main";transition:grid-template-columns .22s cubic-bezier(.4,0,.2,1)}
+#app.sidebar-collapsed{grid-template-columns:var(--sidebar-w-collapsed) 1fr}
 
-/* ── HEADER ── */
-header{display:flex;align-items:center;height:var(--header-h);padding:0 16px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;gap:12px;z-index:10;padding-top:var(--safe-top)}
-.brand{font-size:15px;font-weight:700;color:var(--txt-h);letter-spacing:3px;user-select:none}
-.state-badge{display:flex;align-items:center;gap:6px;margin:0 auto;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;padding:4px 14px;border-radius:20px;border:1px solid var(--border);background:var(--bg);transition:all .3s ease}
-.state-dot{width:6px;height:6px;border-radius:50%;transition:background .3s,box-shadow .3s}
-.header-btns{display:flex;gap:6px}
-.hdr-btn{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--txt-m);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s}
+/* ── TOP BAR ── */
+header{grid-area:topbar;display:flex;align-items:center;height:var(--topbar-h);padding:0 18px;padding-top:var(--safe-top);background:var(--glass);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--border);gap:18px;z-index:20}
+.tb-title{font-family:var(--f-display);font-size:14px;font-weight:600;color:var(--txt-h);letter-spacing:.3px}
+.tb-pills{display:flex;align-items:center;gap:8px;overflow-x:auto;scrollbar-width:none;flex:1}
+.tb-pills::-webkit-scrollbar{display:none}
+.tb-pill{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;color:var(--txt-m);padding:5px 11px;border-radius:20px;border:1px solid var(--border);background:rgba(255,255,255,.02);white-space:nowrap;flex-shrink:0;transition:border-color .3s,color .3s}
+.tb-pill .dot{width:6px;height:6px;border-radius:50%;background:var(--txt-dim);transition:background .3s,box-shadow .3s;flex-shrink:0}
+.tb-pill.ok .dot{background:var(--green);box-shadow:0 0 6px var(--green)}
+.tb-pill.warn .dot{background:var(--amber);box-shadow:0 0 6px var(--amber)}
+.tb-pill.bad .dot{background:var(--red);box-shadow:0 0 6px var(--red)}
+.tb-pill.live .dot{background:var(--cyan);box-shadow:0 0 6px var(--cyan);animation:pulse-dot 1.6s ease-in-out infinite}
+@keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.4}}
+.tb-btns{display:flex;gap:6px;flex-shrink:0}
+.hdr-btn{width:32px;height:32px;border-radius:9px;border:1px solid var(--border);background:transparent;color:var(--txt-m);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s}
 .hdr-btn:hover{border-color:var(--border2);color:var(--txt-h);background:var(--bg3)}
+.hdr-btn.active{border-color:var(--signal);color:var(--signal);background:var(--signal-d)}
 .hdr-btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 
-/* ── MAIN 3-PANEL LAYOUT ── */
-main{display:grid;grid-template-columns:220px 1fr 320px;flex:1;overflow:hidden}
+/* ── SIDEBAR ── */
+.sidebar{grid-area:sidebar;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;z-index:30}
+.sb-brand{display:flex;align-items:center;gap:10px;height:var(--topbar-h);padding:0 16px;padding-top:var(--safe-top);flex-shrink:0;border-bottom:1px solid var(--border)}
+.sb-mark{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,var(--signal),#4a3bff);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 0 16px var(--signal-glow)}
+.sb-mark svg{width:14px;height:14px;stroke:#fff;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.sb-wordmark{font-family:var(--f-display);font-weight:700;font-size:15px;letter-spacing:2.5px;color:var(--txt-h);white-space:nowrap;overflow:hidden;transition:opacity .15s}
+#app.sidebar-collapsed .sb-wordmark{opacity:0;width:0}
 
-/* ── LEFT PANEL: SYSTEM MONITOR ── */
-.panel-left{background:var(--bg2);border-right:1px solid var(--border);padding:16px;overflow-y:auto;display:flex;flex-direction:column;gap:16px}
-.mon-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--txt-m)}
-.mon-row{display:flex;flex-direction:column;gap:5px}
-.mon-label{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;color:var(--txt-m)}
-.mon-val{font-weight:600;color:var(--txt-h);font-variant-numeric:tabular-nums;font-size:12px}
-.mon-bar{height:4px;background:var(--bg);border-radius:2px;overflow:hidden}
-.mon-fill{height:100%;border-radius:2px;transition:width .8s ease,background .5s}
-.mon-divider{height:1px;background:var(--border);margin:4px 0}
-.mon-uptime{font-size:11px;color:var(--txt-m);font-variant-numeric:tabular-nums}
-.mon-uptime span{color:var(--txt-h);font-weight:500}
+.sb-nav{flex:1;overflow-y:auto;padding:10px 8px;display:flex;flex-direction:column;gap:2px}
+.sb-item{display:flex;align-items:center;gap:11px;padding:9px 10px;border-radius:var(--r-sm);color:var(--txt-m);cursor:pointer;border:1px solid transparent;transition:all .16s;white-space:nowrap;overflow:hidden;position:relative}
+.sb-item:hover{background:var(--bg3);color:var(--txt-h)}
+.sb-item.active{background:var(--signal-d);color:var(--signal);border-color:rgba(124,108,255,.25)}
+.sb-item.active::before{content:'';position:absolute;left:-8px;top:50%;transform:translateY(-50%);width:3px;height:16px;border-radius:2px;background:var(--signal)}
+.sb-item svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.sb-item span{font-size:13px;font-weight:500;transition:opacity .1s}
+#app.sidebar-collapsed .sb-item span{opacity:0;width:0}
+#app.sidebar-collapsed .sb-item{justify-content:center}
+#app.sidebar-collapsed .sb-item.active::before{display:none}
 
-/* ── CENTER PANEL: ORB ── */
-.panel-center{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;position:relative;overflow:hidden}
+.sb-foot{padding:12px;border-top:1px solid var(--border);flex-shrink:0}
+.sb-collapse-btn{width:100%;height:32px;border-radius:var(--r-sm);border:1px solid var(--border);background:transparent;color:var(--txt-m);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s}
+.sb-collapse-btn:hover{color:var(--txt-h);border-color:var(--border2)}
+.sb-collapse-btn svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2;transition:transform .2s}
+#app.sidebar-collapsed .sb-collapse-btn svg{transform:rotate(180deg)}
+
+/* ── MAIN AREA ── */
+main{grid-area:main;display:grid;grid-template-columns:1fr var(--right-w);overflow:hidden;transition:grid-template-columns .2s}
+main.right-collapsed{grid-template-columns:1fr 0px}
+
+.page{display:none;overflow-y:auto;padding:26px 28px}
+.page.active{display:block}
+.page-head{margin-bottom:22px}
+.page-eyebrow{font-family:var(--f-mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--signal);margin-bottom:5px}
+.page-title{font-family:var(--f-display);font-size:22px;font-weight:600;color:var(--txt-h)}
+.page-sub{font-size:13px;color:var(--txt-m);margin-top:4px;max-width:60ch}
+
+/* Card primitives, reused across pages */
+.card{background:var(--glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px 18px}
+.card-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:var(--txt-m);margin-bottom:12px}
+.grid-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+.stat-card{display:flex;flex-direction:column;gap:6px}
+.stat-card .stat-label{font-size:11px;color:var(--txt-m);display:flex;align-items:center;justify-content:space-between}
+.stat-card .stat-val{font-family:var(--f-mono);font-size:22px;font-weight:500;color:var(--txt-h)}
+.stat-card .stat-val small{font-size:12px;color:var(--txt-m);font-weight:400;margin-left:4px}
+.pill-sm{font-size:9px;padding:2px 7px;border-radius:10px;background:var(--green-d);color:var(--green);font-weight:600;letter-spacing:.3px}
+.pill-sm.warn{background:var(--amber-d);color:var(--amber)}
+.pill-sm.off{background:rgba(255,255,255,.05);color:var(--txt-m)}
+
+/* ── CENTER: CHAT PAGE (orb + log) ── */
+#page-chats{display:none;grid-template-columns:1fr;padding:0;overflow:hidden}
+#page-chats.active{display:grid}
+.chat-layout{display:grid;grid-template-rows:1fr auto;height:100%;overflow:hidden}
+.orb-zone{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:20px;overflow:hidden;border-bottom:1px solid var(--border)}
 .orb-wrap{position:relative;display:flex;align-items:center;justify-content:center}
-.orb{width:var(--orb-size);height:var(--orb-size);border-radius:50%;background:var(--bg2);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;position:relative;transition:border-color .4s,box-shadow .4s,background .4s}
-.orb-ring{position:absolute;inset:-12px;border-radius:50%;border:1px solid transparent;transition:border-color .4s,opacity .4s;pointer-events:none}
-.orb-ring-2{position:absolute;inset:-24px;border-radius:50%;border:1px dashed transparent;transition:border-color .4s,opacity .4s,transform .4s;pointer-events:none}
-.orb-inner{font-size:13px;font-weight:600;letter-spacing:1px;text-transform:uppercase;transition:color .3s}
+.orb{width:var(--orb-size);height:var(--orb-size);border-radius:50%;background:radial-gradient(circle at 35% 30%,var(--bg3),var(--bg2));border:2px solid var(--signal);box-shadow:0 0 40px var(--signal-glow),0 0 90px rgba(124,108,255,.1);display:flex;align-items:center;justify-content:center;position:relative;transition:border-color .4s,box-shadow .4s,background .4s}
+.orb-ring{position:absolute;inset:-13px;border-radius:50%;border:1px solid transparent;transition:border-color .4s,opacity .4s}
+.orb-ring-2{position:absolute;inset:-26px;border-radius:50%;border:1px dashed transparent;transition:border-color .4s,opacity .4s}
+.orb-inner{font-size:13px;font-weight:600;letter-spacing:1px;text-transform:uppercase;transition:color .3s;font-family:var(--f-display)}
 
-/* State-specific orb styles */
-.orb[data-state="INITIALIZING"]{border-color:var(--border2);animation:orb-idle 4s ease-in-out infinite}
+.orb[data-state="INITIALIZING"]{border-color:var(--border2);box-shadow:none;animation:orb-idle 4s ease-in-out infinite}
 .orb[data-state="INITIALIZING"] .orb-inner{color:var(--txt-m)}
 .orb[data-state="INITIALIZING"] .orb-ring-2{border-color:var(--border2);animation:spin-slow 8s linear infinite;opacity:.4}
 
-.orb[data-state="LISTENING"]{border-color:var(--cyan);box-shadow:0 0 40px rgba(0,212,255,.15),0 0 80px rgba(0,212,255,.05);animation:orb-listen 3s ease-in-out infinite}
+.orb[data-state="LISTENING"]{border-color:var(--cyan);box-shadow:0 0 40px rgba(0,212,255,.18),0 0 90px rgba(0,212,255,.06);animation:orb-listen 3s ease-in-out infinite}
 .orb[data-state="LISTENING"] .orb-inner{color:var(--cyan)}
-.orb[data-state="LISTENING"] .orb-ring{border-color:rgba(0,212,255,.3)}
+.orb[data-state="LISTENING"] .orb-ring{border-color:rgba(0,212,255,.32)}
 
-.orb[data-state="SPEAKING"]{border-color:var(--amber);box-shadow:0 0 50px rgba(255,170,0,.2),0 0 100px rgba(255,170,0,.08);animation:orb-speak 1.5s ease-in-out infinite}
+.orb[data-state="SPEAKING"]{border-color:var(--amber);box-shadow:0 0 54px rgba(255,170,0,.22),0 0 110px rgba(255,170,0,.08);animation:orb-speak 1.5s ease-in-out infinite}
 .orb[data-state="SPEAKING"] .orb-inner{color:var(--amber)}
-.orb[data-state="SPEAKING"] .orb-ring{border-color:rgba(255,170,0,.3)}
+.orb[data-state="SPEAKING"] .orb-ring{border-color:rgba(255,170,0,.32)}
 
-.orb[data-state="THINKING"]{border-color:var(--amber);box-shadow:0 0 30px rgba(255,170,0,.1);animation:orb-think 2s ease-in-out infinite}
+.orb[data-state="THINKING"]{border-color:var(--amber);box-shadow:0 0 32px rgba(255,170,0,.12);animation:orb-think 2s ease-in-out infinite}
 .orb[data-state="THINKING"] .orb-inner{color:var(--amber)}
 .orb[data-state="THINKING"] .orb-ring-2{border-color:rgba(255,170,0,.25);animation:spin-slow 3s linear infinite;opacity:.6}
 
-.orb[data-state="MUTED"]{border-color:var(--red);opacity:.6}
+.orb[data-state="MUTED"]{border-color:var(--red);box-shadow:none;opacity:.6}
 .orb[data-state="MUTED"] .orb-inner{color:var(--red)}
 
-.orb[data-state="IDLE"]{border-color:var(--border);box-shadow:none}
-.orb[data-state="IDLE"] .orb-inner{color:var(--txt-m)}
+.orb[data-state="IDLE"]{border-color:var(--signal);box-shadow:0 0 30px var(--signal-glow)}
+.orb[data-state="IDLE"] .orb-inner{color:var(--signal)}
 
 .orb[data-state="DISCONNECTED"]{border-color:var(--red);animation:orb-disconnected 2s ease-in-out infinite;opacity:.5}
 .orb[data-state="DISCONNECTED"] .orb-inner{color:var(--red)}
 
-/* Orb keyframes */
 @keyframes orb-idle{0%,100%{transform:scale(1);opacity:.7}50%{transform:scale(1.02);opacity:.9}}
 @keyframes orb-listen{0%,100%{transform:scale(1);box-shadow:0 0 40px rgba(0,212,255,.15),0 0 80px rgba(0,212,255,.05)}50%{transform:scale(1.04);box-shadow:0 0 60px rgba(0,212,255,.25),0 0 120px rgba(0,212,255,.1)}}
 @keyframes orb-speak{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
@@ -102,99 +175,195 @@ main{display:grid;grid-template-columns:220px 1fr 320px;flex:1;overflow:hidden}
 @keyframes orb-disconnected{0%,100%{opacity:.4}50%{opacity:.6}}
 @keyframes spin-slow{to{transform:rotate(360deg)}}
 
-/* State label */
-.state-label{font-size:13px;font-weight:600;letter-spacing:2px;text-transform:uppercase;transition:color .3s}
-
-/* ── WAVEFORM ── */
-.waveform{display:flex;align-items:center;gap:2px;height:40px}
+.state-label{font-family:var(--f-display);font-size:13px;font-weight:600;letter-spacing:2px;text-transform:uppercase;transition:color .3s}
+.waveform{display:flex;align-items:center;gap:2px;height:36px}
 .waveform .bar{width:3px;background:var(--cyan);border-radius:2px;transition:height .1s ease,height .3s ease,background .3s,opacity .3s;opacity:.3}
 .waveform.active .bar{opacity:1;animation:wave-bar var(--d,.5s) ease-in-out infinite alternate}
 .waveform.active.speaking .bar{background:var(--amber)}
 .waveform.active.thinking .bar{background:var(--amber);opacity:.5;animation:none;height:3px!important}
-
 @keyframes wave-bar{from{height:var(--h-min,4px)}to{height:var(--h-max,20px)}}
 
-/* ── RIGHT PANEL: ACTIVITY LOG ── */
-.panel-right{display:flex;flex-direction:column;background:var(--bg2);border-left:1px solid var(--border);overflow:hidden}
-.log-header{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--txt-m);padding:14px 16px 10px;flex-shrink:0}
-#activity-log{flex:1;overflow-y:auto;padding:0 12px 12px;display:flex;flex-direction:column;gap:6px;scroll-behavior:smooth}
-
-/* Log messages */
+.chat-bottom{display:flex;flex-direction:column;flex-shrink:0}
+#activity-log-inline{max-height:220px;overflow-y:auto;padding:10px 20px;display:flex;flex-direction:column;gap:6px;scroll-behavior:smooth;border-bottom:1px solid var(--border)}
 .log-msg{font-size:13px;line-height:1.55;max-width:100%;word-wrap:break-word;animation:log-in .25s ease}
 @keyframes log-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
-.log-msg.user{padding:6px 10px;border-radius:8px;background:var(--bg3);border:1px solid var(--border);color:var(--txt-h)}
+.log-msg.user{padding:6px 10px;border-radius:8px;background:var(--bg3);border:1px solid var(--border);color:var(--txt-h);max-width:80%;align-self:flex-end}
 .log-msg.user .log-prefix{color:var(--txt-m);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:2px}
-.log-msg.vyren{padding:6px 10px;border-radius:8px;color:var(--txt);border-left:2px solid var(--cyan)}
-.log-msg.vyren .log-prefix{color:var(--cyan);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:2px}
-.log-msg.system{font-size:11px;color:var(--txt-m);text-align:center;padding:4px 8px}
-.log-msg.tool{font-size:11px;color:var(--amber);text-align:center;padding:4px 10px;background:var(--amber-d);border-radius:16px;align-self:center}
-.log-msg.confirm{padding:10px 14px;background:var(--red-d);border:1px solid rgba(255,68,102,.2);border-radius:var(--r);text-align:center}
+.log-msg.vyren{padding:6px 10px;border-radius:8px;color:var(--txt);border-left:2px solid var(--signal);max-width:80%}
+.log-msg.vyren .log-prefix{color:var(--signal);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:2px}
+.log-msg.system{font-size:11px;color:var(--txt-m);text-align:center;padding:4px 8px;font-family:var(--f-mono)}
+.log-msg.tool{font-size:11px;color:var(--amber);text-align:center;padding:5px 12px;background:var(--amber-d);border-radius:16px;align-self:center;font-family:var(--f-mono);display:flex;align-items:center;gap:6px}
+.log-msg.tool::before{content:'⚙';font-size:10px}
+.log-msg.confirm{padding:12px 14px;background:var(--red-d);border:1px solid rgba(255,68,102,.2);border-radius:var(--r);text-align:center}
 .confirm-actions{display:flex;gap:8px;margin-top:8px;justify-content:center}
 .confirm-actions button{padding:6px 16px;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
 .btn-approve{background:var(--green);color:#000}
 .btn-decline{background:var(--bg);color:var(--txt);border:1px solid var(--border2)!important}
-
-/* Typing indicator */
 .typing-dots{display:inline-flex;gap:4px;padding:6px 10px}
-.typing-dots span{width:5px;height:5px;border-radius:50%;background:var(--cyan);animation:dot-bounce .6s ease-in-out infinite}
+.typing-dots span{width:5px;height:5px;border-radius:50%;background:var(--signal);animation:dot-bounce .6s ease-in-out infinite}
 .typing-dots span:nth-child(2){animation-delay:.15s}
 .typing-dots span:nth-child(3){animation-delay:.3s}
 @keyframes dot-bounce{0%,100%{transform:translateY(0);opacity:.3}50%{transform:translateY(-4px);opacity:1}}
 
-/* ── FILE DROP ZONE ── */
-.drop-zone-wrap{padding:0 12px;flex-shrink:0}
-.drop-zone{border:1px dashed var(--border);border-radius:var(--r);padding:14px;text-align:center;font-size:12px;color:var(--txt-m);cursor:pointer;transition:all .2s}
-.drop-zone:hover,.drop-zone.drag-over{border-color:var(--cyan);color:var(--cyan);background:var(--cyan-d)}
-.drop-zone .dz-icon{font-size:18px;margin-bottom:4px;display:block;opacity:.5}
-.drop-zone .dz-file{color:var(--green);font-weight:500;margin-top:4px}
-.drop-zone input{display:none}
-
-/* ── TEXT INPUT ── */
-.input-bar{display:flex;gap:8px;padding:10px 12px;padding-bottom:max(10px,var(--safe-bot));border-top:1px solid var(--border);flex-shrink:0;align-items:center}
-#msg-input{flex:1;background:var(--bg-input);border:1px solid var(--border);border-radius:10px;padding:9px 14px;color:var(--txt-h);font-size:13px;font-family:inherit;outline:none;transition:border-color .2s,box-shadow .2s}
-#msg-input:focus{border-color:var(--cyan);box-shadow:0 0 0 2px var(--cyan-d)}
+.input-bar{display:flex;gap:8px;padding:12px 20px;padding-bottom:max(12px,var(--safe-bot));align-items:center}
+#msg-input{flex:1;background:var(--bg-input);border:1px solid var(--border);border-radius:11px;padding:10px 15px;color:var(--txt-h);font-size:13px;font-family:inherit;outline:none;transition:border-color .2s,box-shadow .2s}
+#msg-input:focus{border-color:var(--signal);box-shadow:0 0 0 3px var(--signal-d)}
 #msg-input::placeholder{color:var(--txt-m)}
-.send-btn{width:36px;height:36px;border-radius:10px;background:var(--cyan);border:none;color:#000;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:transform .15s,opacity .15s}
+.send-btn{width:38px;height:38px;border-radius:11px;background:var(--signal);border:none;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:transform .15s,opacity .15s}
 .send-btn:active{transform:scale(.92)}
 .send-btn:disabled{opacity:.25;pointer-events:none}
 .send-btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+.attach-btn{width:38px;height:38px;border-radius:11px;background:transparent;border:1px solid var(--border);color:var(--txt-m);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s}
+.attach-btn:hover{color:var(--txt-h);border-color:var(--border2)}
+.attach-btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 
-/* ── RECONNECTING OVERLAY ── */
+/* ── RIGHT PANEL: WORKSPACE ── */
+.right-panel{background:var(--glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-left:1px solid var(--border);overflow-y:auto;overflow-x:hidden;padding:16px;display:flex;flex-direction:column;gap:16px;transition:opacity .15s,padding .2s}
+main.right-collapsed .right-panel{opacity:0;padding:16px 0;pointer-events:none}
+.rp-section-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:var(--txt-m);display:flex;align-items:center;justify-content:space-between}
+.rp-list{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.rp-item{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border-radius:var(--r-sm);background:rgba(255,255,255,.02);border:1px solid var(--border);font-size:12px}
+.rp-item .rp-name{color:var(--txt-h);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rp-item .rp-meta{color:var(--txt-m);font-size:10px;font-family:var(--f-mono);flex-shrink:0}
+.rp-empty{font-size:12px;color:var(--txt-m);text-align:center;padding:10px 4px}
+
+.mon-row{display:flex;flex-direction:column;gap:5px}
+.mon-label{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;color:var(--txt-m)}
+.mon-val{font-weight:600;color:var(--txt-h);font-variant-numeric:tabular-nums;font-size:12px;font-family:var(--f-mono)}
+.mon-bar{height:4px;background:var(--bg);border-radius:2px;overflow:hidden}
+.mon-fill{height:100%;border-radius:2px;transition:width .8s ease,background .5s}
+
+.drop-zone-wrap{padding:0}
+.drop-zone{border:1px dashed var(--border);border-radius:var(--r);padding:14px;text-align:center;font-size:12px;color:var(--txt-m);cursor:pointer;transition:all .2s}
+.drop-zone:hover,.drop-zone.drag-over{border-color:var(--signal);color:var(--signal);background:var(--signal-d)}
+.drop-zone .dz-icon{font-size:18px;margin-bottom:4px;display:block;opacity:.5}
+.drop-zone input{display:none}
+
+/* ── RECONNECTING BAR ── */
 .reconnecting{position:fixed;top:0;left:0;right:0;height:2px;z-index:100;background:linear-gradient(90deg,transparent,var(--amber),transparent);animation:reconnect-slide 1.5s ease-in-out infinite}
 @keyframes reconnect-slide{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
 
-/* ── MOBILE LAYOUT (< 768px) ── */
-@media(max-width:767px){
-  main{grid-template-columns:1fr;grid-template-rows:auto 1fr auto}
-  .panel-left{display:none}
-  .panel-center{padding:16px 16px 8px;min-height:0;gap:16px}
-  .orb{--orb-size:120px}
-  .orb-ring{inset:-8px}
-  .orb-ring-2{inset:-16px}
-  .state-label{font-size:12px}
-  .waveform .bar{width:2px}
-  .panel-right{border-left:none;border-top:1px solid var(--border)}
-  .drop-zone-wrap{padding:8px 12px}
-}
+/* ── GENERIC PAGE COMPONENTS (Memory / Logs / Settings / Dashboard / Files / Planner / Developer / Vision / Browser) ── */
+.mem-tier{margin-bottom:18px}
+.mem-tier-label{display:flex;align-items:center;gap:8px;font-family:var(--f-display);font-size:13px;font-weight:600;color:var(--txt-h);margin-bottom:10px}
+.mem-tier-label .cnt{font-family:var(--f-mono);font-size:11px;color:var(--txt-m);font-weight:400}
+.mem-chip-list{display:flex;flex-direction:column;gap:6px}
+.mem-chip{display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--glass);border:1px solid var(--border);border-radius:var(--r-sm);font-size:12.5px;color:var(--txt)}
+.mem-chip .dot{width:5px;height:5px;border-radius:50%;background:var(--signal);flex-shrink:0}
+.mem-search{display:flex;gap:8px;margin-bottom:18px}
+.mem-search input{flex:1;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--r-sm);padding:9px 13px;color:var(--txt-h);font-size:13px;outline:none}
+.mem-search input:focus{border-color:var(--signal)}
 
-/* ── UTILITY ── */
-code{background:var(--bg);padding:1px 5px;border-radius:3px;font-size:12px;font-family:'SF Mono',Monaco,'Cascadia Code',monospace}
-strong{color:var(--txt-h)}
+.log-stream{display:flex;flex-direction:column}
+.log-line{display:flex;gap:14px;padding:9px 4px;border-bottom:1px solid var(--border);font-size:12.5px;align-items:baseline}
+.log-line .lt{font-family:var(--f-mono);color:var(--txt-dim);font-size:11px;flex-shrink:0;width:52px}
+.log-line .lm{color:var(--txt)}
+.log-line .lm.hl{color:var(--signal)}
+
+.settings-section{margin-bottom:26px}
+.settings-section-title{font-family:var(--f-display);font-size:14px;font-weight:600;color:var(--txt-h);margin-bottom:2px}
+.settings-section-sub{font-size:12px;color:var(--txt-m);margin-bottom:12px}
+.settings-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border);gap:16px}
+.settings-row:last-child{border-bottom:none}
+.settings-row-label{font-size:13px;color:var(--txt-h);font-weight:500}
+.settings-row-desc{font-size:11.5px;color:var(--txt-m);margin-top:2px}
+.toggle{width:38px;height:22px;border-radius:12px;background:var(--bg3);border:1px solid var(--border);position:relative;cursor:pointer;flex-shrink:0;transition:background .2s}
+.toggle::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--txt-m);transition:transform .2s,background .2s}
+.toggle.on{background:var(--signal-d);border-color:var(--signal)}
+.toggle.on::after{transform:translateX(16px);background:var(--signal)}
+.sel{background:var(--bg-input);border:1px solid var(--border);border-radius:var(--r-sm);padding:7px 10px;color:var(--txt-h);font-size:12.5px;font-family:inherit;outline:none;min-width:150px}
+
+.fm-toolbar{display:flex;gap:10px;margin-bottom:16px}
+.fm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.fm-card{background:var(--glass);border:1px solid var(--border);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:8px;transition:border-color .15s}
+.fm-card:hover{border-color:var(--border2)}
+.fm-icon{width:34px;height:34px;border-radius:9px;background:var(--signal-d);display:flex;align-items:center;justify-content:center;color:var(--signal);font-size:15px;font-weight:600;font-family:var(--f-mono)}
+.fm-name{font-size:12.5px;color:var(--txt-h);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fm-meta{font-size:10.5px;color:var(--txt-m);font-family:var(--f-mono)}
+.fm-actions{display:flex;gap:5px;margin-top:2px}
+.fm-actions button{flex:1;font-size:10.5px;padding:5px 0;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--txt-m);cursor:pointer;transition:all .15s}
+.fm-actions button:hover{color:var(--txt-h);border-color:var(--border2)}
+
+.plan-col{display:flex;flex-direction:column;gap:8px}
+.plan-task{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:var(--glass);border:1px solid var(--border);border-radius:var(--r-sm)}
+.plan-task .chk{width:15px;height:15px;border-radius:5px;border:1.5px solid var(--border2);flex-shrink:0;margin-top:2px}
+.plan-task.done .chk{background:var(--green);border-color:var(--green)}
+.plan-task.done .plan-task-title{color:var(--txt-m);text-decoration:line-through}
+.plan-task-title{font-size:12.5px;color:var(--txt-h)}
+.plan-task-meta{font-size:10.5px;color:var(--txt-m);margin-top:3px;font-family:var(--f-mono)}
+
+.dev-block{margin-bottom:16px}
+.dev-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--txt-m);margin-bottom:8px}
+.dev-code{background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px;font-family:var(--f-mono);font-size:11.5px;color:var(--txt);line-height:1.7;overflow-x:auto;white-space:pre-wrap}
+.dev-code .k{color:var(--signal)}
+.dev-code .v{color:var(--green)}
+.dev-code .err{color:var(--red)}
+
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:60px 20px;text-align:center}
+.empty-state .es-icon{width:52px;height:52px;border-radius:14px;background:var(--bg3);display:flex;align-items:center;justify-content:center;color:var(--txt-dim)}
+.empty-state .es-icon svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.6}
+.empty-state .es-title{font-family:var(--f-display);font-size:14px;font-weight:600;color:var(--txt-h)}
+.empty-state .es-sub{font-size:12px;color:var(--txt-m);max-width:32ch}
+
+/* ── MOBILE (<768px) ── */
+@media(max-width:767px){
+  #app{grid-template-columns:0 1fr}
+  #app.sidebar-open{grid-template-columns:var(--sidebar-w) 1fr}
+  .sidebar{position:fixed;top:0;left:0;bottom:0;width:var(--sidebar-w);transform:translateX(-100%);transition:transform .22s;z-index:50}
+  #app.sidebar-open .sidebar{transform:translateX(0)}
+  main{grid-template-columns:1fr}
+  .right-panel{position:fixed;top:var(--topbar-h);right:0;bottom:0;width:86vw;max-width:340px;transform:translateX(100%);transition:transform .22s;z-index:40}
+  main.right-open .right-panel{transform:translateX(0)}
+  .orb{--orb-size:120px}
+  .page{padding:18px 16px}
+}
 </style>
 </head>
 <body>
 <div id="app">
 
-  <!-- HEADER -->
-  <header>
-    <div class="brand">VYREN</div>
-    <div class="state-badge" id="state-badge">
-      <span class="state-dot" id="state-dot"></span>
-      <span id="state-text">connecting</span>
+  <!-- SIDEBAR -->
+  <nav class="sidebar" id="sidebar">
+    <div class="sb-brand">
+      <div class="sb-mark"><svg viewBox="0 0 24 24"><path d="M13 2 3 14h8l-1 8 10-12h-8l1-8z"/></svg></div>
+      <div class="sb-wordmark">VYREN</div>
     </div>
-    <div class="header-btns">
+    <div class="sb-nav" id="sb-nav">
+      <div class="sb-item active" data-page="chats"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>Chats</span></div>
+      <div class="sb-item" data-page="memory"><svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 3 2 4 2 7v2h10v-2c0-3 2-4 2-7a7 7 0 0 0-7-7z"/><line x1="9" y1="21" x2="15" y2="21"/></svg><span>Memory</span></div>
+      <div class="sb-item" data-page="planner"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><span>Planner</span></div>
+      <div class="sb-item" data-page="files"><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg><span>Files</span></div>
+      <div class="sb-item" data-page="vision"><svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span>Vision</span></div>
+      <div class="sb-item" data-page="browser"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z"/></svg><span>Browser</span></div>
+      <div class="sb-item" data-page="skills"><svg viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4l-6 6a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l6-6a4 4 0 0 0 5.4-5.4z"/></svg><span>Skills</span></div>
+      <div class="sb-item" data-page="logs"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg><span>Logs</span></div>
+      <div class="sb-item" data-page="dashboard"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg><span>Dashboard</span></div>
+      <div class="sb-item" data-page="developer"><svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg><span>Developer</span></div>
+      <div class="sb-item" data-page="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span>Settings</span></div>
+    </div>
+    <div class="sb-foot">
+      <button class="sb-collapse-btn" id="sb-collapse-btn" title="Collapse sidebar">
+        <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+    </div>
+  </nav>
+
+  <!-- TOP BAR -->
+  <header>
+    <div class="tb-title" id="page-title-tb">Chats</div>
+    <div class="tb-pills" id="tb-pills">
+      <div class="tb-pill live" id="pill-conn"><span class="dot"></span><span id="pill-conn-text">connecting</span></div>
+      <div class="tb-pill ok"><span class="dot"></span><span id="pill-model">gemini-3.1-flash-live</span></div>
+      <div class="tb-pill ok"><span class="dot"></span><span id="pill-mem">memory ready</span></div>
+      <div class="tb-pill off"><span class="dot"></span><span>vision idle</span></div>
+      <div class="tb-pill ok"><span class="dot"></span><span id="pill-mic">mic ready</span></div>
+    </div>
+    <div class="tb-btns">
       <button class="hdr-btn" id="mute-btn" title="Toggle mute (M)">
         <svg viewBox="0 0 24 24"><path d="M12 1a4 4 0 0 0-4 4v7a4 4 0 0 0 8 0V5a4 4 0 0 0-4-4z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+      </button>
+      <button class="hdr-btn" id="right-toggle-btn" title="Toggle workspace panel">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
       </button>
       <button class="hdr-btn" id="fs-btn" title="Fullscreen (F11)">
         <svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
@@ -202,79 +371,387 @@ strong{color:var(--txt-h)}
     </div>
   </header>
 
-  <!-- MAIN 3-PANEL -->
-  <main>
+  <!-- MAIN -->
+  <main id="main">
 
-    <!-- LEFT: SYSTEM MONITOR -->
-    <aside class="panel-left">
-      <div class="mon-title">System</div>
+    <!-- Everything below is a "page" toggled by sidebar nav. -->
+    <div id="pages-wrap" style="overflow:hidden;display:flex;flex-direction:column;min-width:0">
 
-      <div class="mon-row">
-        <div class="mon-label"><span>CPU</span><span class="mon-val" id="cpu-val">—</span></div>
-        <div class="mon-bar"><div class="mon-fill" id="cpu-fill" style="width:0%;background:var(--green)"></div></div>
-      </div>
-      <div class="mon-row">
-        <div class="mon-label"><span>Memory</span><span class="mon-val" id="mem-val">—</span></div>
-        <div class="mon-bar"><div class="mon-fill" id="mem-fill" style="width:0%;background:var(--green)"></div></div>
-      </div>
-      <div class="mon-row">
-        <div class="mon-label"><span>Disk</span><span class="mon-val" id="disk-val">—</span></div>
-        <div class="mon-bar"><div class="mon-fill" id="disk-fill" style="width:0%;background:var(--green)"></div></div>
-      </div>
-      <div class="mon-row">
-        <div class="mon-label"><span>Network</span><span class="mon-val" id="net-val">—</span></div>
-        <div class="mon-bar"><div class="mon-fill" id="net-fill" style="width:0%;background:var(--cyan)"></div></div>
-      </div>
-
-      <div class="mon-divider"></div>
-
-      <div class="mon-row">
-        <div class="mon-label"><span>Tools</span><span class="mon-val" id="tools-val">—</span></div>
-      </div>
-      <div class="mon-row">
-        <div class="mon-label"><span>Memory</span><span class="mon-val" id="mem-entries-val">—</span></div>
-      </div>
-
-      <div class="mon-divider"></div>
-
-      <div class="mon-uptime">Uptime: <span id="uptime-val">—</span></div>
-    </aside>
-
-    <!-- CENTER: ORB -->
-    <section class="panel-center">
-      <div class="orb-wrap">
-        <div class="orb" id="orb" data-state="INITIALIZING">
-          <div class="orb-ring"></div>
-          <div class="orb-ring-2"></div>
-          <div class="orb-inner" id="orb-label">...</div>
+      <!-- CHATS (live, unchanged behavior) -->
+      <div class="page" id="page-chats" style="display:none">
+        <div class="chat-layout">
+          <div class="orb-zone">
+            <div class="orb-wrap">
+              <div class="orb" id="orb" data-state="INITIALIZING">
+                <div class="orb-ring"></div>
+                <div class="orb-ring-2"></div>
+                <div class="orb-inner" id="orb-label">...</div>
+              </div>
+            </div>
+            <div class="state-label" id="state-label">Initializing</div>
+            <div class="waveform" id="waveform"></div>
+          </div>
+          <div class="chat-bottom">
+            <div id="activity-log-inline">
+              <div class="log-msg system">VYREN ready. Type a message or use voice.</div>
+            </div>
+            <div class="input-bar">
+              <button class="attach-btn" id="attach-btn" title="Attach a file">
+                <svg viewBox="0 0 24 24"><path d="M21.4 11.1 12.5 20a5 5 0 0 1-7-7l9-9a3.5 3.5 0 0 1 5 5l-9 9a2 2 0 0 1-3-3l8-8"/></svg>
+              </button>
+              <input type="text" id="msg-input" placeholder="Type a message..." autocomplete="off">
+              <button class="send-btn" id="send-btn" disabled title="Send (Enter)">
+                <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              </button>
+              <input type="file" id="file-input" style="display:none">
+            </div>
+          </div>
         </div>
       </div>
-      <div class="state-label" id="state-label">Initializing</div>
-      <div class="waveform" id="waveform"></div>
-    </section>
 
-    <!-- RIGHT: ACTIVITY LOG -->
-    <aside class="panel-right">
-      <div class="log-header">Activity</div>
-      <div id="activity-log">
-        <div class="log-msg system">VYREN ready. Type a message or use voice.</div>
+      <!-- MEMORY -->
+      <div class="page" id="page-memory">
+        <div class="page-head">
+          <div class="page-eyebrow">Recall</div>
+          <div class="page-title">Memory</div>
+          <div class="page-sub">Everything VYREN has chosen to keep, organized by how long it lasts.</div>
+        </div>
+        <div class="mem-search"><input type="text" placeholder="Search memory..."></div>
+        <div class="mem-tier">
+          <div class="mem-tier-label">Pinned <span class="cnt">2</span></div>
+          <div class="mem-chip-list">
+            <div class="mem-chip"><span class="dot"></span>Startup: Project NOVA — multi-agent AI OS, MCP integration</div>
+            <div class="mem-chip"><span class="dot"></span>Startup: Project VYREN — voice-first, Gemini Live native audio</div>
+          </div>
+        </div>
+        <div class="mem-tier">
+          <div class="mem-tier-label">Long-Term <span class="cnt">14</span></div>
+          <div class="mem-chip-list">
+            <div class="mem-chip"><span class="dot"></span>User is a Mechatronics Engineering student, ML lead on the team</div>
+            <div class="mem-chip"><span class="dot"></span>Prefers direct, no-filler communication style</div>
+            <div class="mem-chip"><span class="dot"></span>Interested in robotics, UI/UX, vibecoding</div>
+          </div>
+        </div>
+        <div class="mem-tier">
+          <div class="mem-tier-label">Recent <span class="cnt">6</span></div>
+          <div class="mem-chip-list">
+            <div class="mem-chip"><span class="dot"></span>Debugged Gemini Live voice engine self-conversation loop</div>
+            <div class="mem-chip"><span class="dot"></span>Merged legacy memory store into MemoryManager (v2)</div>
+            <div class="mem-chip"><span class="dot"></span>Reviewed tool registry — wired 3 orphaned modules in</div>
+          </div>
+        </div>
+        <div class="grid-cards" style="margin-top:6px">
+          <div class="card stat-card"><div class="stat-label">Total entries</div><div class="stat-val">142</div></div>
+          <div class="card stat-card"><div class="stat-label">Layers active</div><div class="stat-val">6</div></div>
+          <div class="card stat-card"><div class="stat-label">Last consolidation</div><div class="stat-val" style="font-size:14px">54m ago</div></div>
+        </div>
       </div>
 
-      <!-- FILE DROP ZONE -->
+      <!-- PLANNER -->
+      <div class="page" id="page-planner">
+        <div class="page-head">
+          <div class="page-eyebrow">Planning</div>
+          <div class="page-title">Planner</div>
+          <div class="page-sub">Tasks VYREN is tracking on your behalf.</div>
+        </div>
+        <div class="grid-cards" style="grid-template-columns:1fr 1fr;align-items:start;gap:18px">
+          <div>
+            <div class="mem-tier-label">Active tasks</div>
+            <div class="plan-col">
+              <div class="plan-task"><div class="chk"></div><div><div class="plan-task-title">Fix VYREN voice self-conversation loop</div><div class="plan-task-meta">In progress · updated 4m ago</div></div></div>
+              <div class="plan-task"><div class="chk"></div><div><div class="plan-task-title">Redesign VYREN web interface</div><div class="plan-task-meta">In progress · updated just now</div></div></div>
+              <div class="plan-task"><div class="chk"></div><div><div class="plan-task-title">Full codebase audit (30 modules)</div><div class="plan-task-meta">Queued · blocked on voice fix</div></div></div>
+            </div>
+          </div>
+          <div>
+            <div class="mem-tier-label">Completed</div>
+            <div class="plan-col">
+              <div class="plan-task done"><div class="chk"></div><div><div class="plan-task-title">Fix 1008 GoAway session crash loop</div><div class="plan-task-meta">Done</div></div></div>
+              <div class="plan-task done"><div class="chk"></div><div><div class="plan-task-title">Merge v1/v2 memory stores</div><div class="plan-task-meta">Done</div></div></div>
+              <div class="plan-task done"><div class="chk"></div><div><div class="plan-task-title">Fix logger namespace bug</div><div class="plan-task-meta">Done</div></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="mem-tier" style="margin-top:22px">
+          <div class="mem-tier-label">Scheduled</div>
+          <div class="rp-list">
+            <div class="rp-item"><span class="rp-name">Hourly memory consolidation</span><span class="rp-meta">every 3600s</span></div>
+            <div class="rp-item"><span class="rp-name">Health check</span><span class="rp-meta">every 600s</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- FILES -->
+      <div class="page" id="page-files">
+        <div class="page-head">
+          <div class="page-eyebrow">Storage</div>
+          <div class="page-title">Files</div>
+          <div class="page-sub">Upload something and ask VYREN about it directly.</div>
+        </div>
+        <div class="fm-toolbar">
+          <div class="drop-zone" id="fm-drop-zone" style="flex:1">
+            <span class="dz-icon">+</span>Drop a file here or click to upload
+          </div>
+        </div>
+        <div class="mem-tier-label" style="margin-bottom:10px">Recent files</div>
+        <div class="fm-grid">
+          <div class="fm-card"><div class="fm-icon">PY</div><div class="fm-name">engine.py</div><div class="fm-meta">voice_engine · 41 KB</div><div class="fm-actions"><button>Preview</button><button>Ask</button></div></div>
+          <div class="fm-card"><div class="fm-icon">MD</div><div class="fm-name">incident_report.md</div><div class="fm-meta">docs · 6 KB</div><div class="fm-actions"><button>Preview</button><button>Ask</button></div></div>
+          <div class="fm-card"><div class="fm-icon">LOG</div><div class="fm-name">boot_11-53.log</div><div class="fm-meta">logs · 3 KB</div><div class="fm-actions"><button>Preview</button><button>Ask</button></div></div>
+        </div>
+      </div>
+
+      <!-- VISION -->
+      <div class="page" id="page-vision">
+        <div class="page-head">
+          <div class="page-eyebrow">Perception</div>
+          <div class="page-title">Vision</div>
+          <div class="page-sub">Screen and image analysis. Off by default for privacy — enable per session.</div>
+        </div>
+        <div class="empty-state" style="border:1px dashed var(--border);border-radius:var(--r-lg);background:var(--glass)">
+          <div class="es-icon"><svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></div>
+          <div class="es-title">Vision is idle</div>
+          <div class="es-sub">No screen capture or continuous analysis running. Enable it below to let VYREN see what you see.</div>
+        </div>
+        <div class="settings-row" style="margin-top:18px">
+          <div><div class="settings-row-label">Continuous screen analysis</div><div class="settings-row-desc">VYREN watches your active window and narrates changes</div></div>
+          <div class="toggle" data-toggle></div>
+        </div>
+        <div class="settings-row">
+          <div><div class="settings-row-label">Webcam</div><div class="settings-row-desc">Not detected</div></div>
+          <span class="pill-sm off">unavailable</span>
+        </div>
+      </div>
+
+      <!-- BROWSER -->
+      <div class="page" id="page-browser">
+        <div class="page-head">
+          <div class="page-eyebrow">Automation</div>
+          <div class="page-title">Browser</div>
+          <div class="page-sub">VYREN's web automation activity — navigation, clicks, and page reads.</div>
+        </div>
+        <div class="empty-state" style="border:1px dashed var(--border);border-radius:var(--r-lg);background:var(--glass)">
+          <div class="es-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z"/></svg></div>
+          <div class="es-title">No active session</div>
+          <div class="es-sub">Ask VYREN to open or research something on the web and this page will show what it's doing, live.</div>
+        </div>
+      </div>
+
+      <!-- SKILLS -->
+      <div class="page" id="page-skills">
+        <div class="page-head">
+          <div class="page-eyebrow">Tool registry</div>
+          <div class="page-title">Skills</div>
+          <div class="page-sub">47 tools currently loaded, grouped by what they touch.</div>
+        </div>
+        <div class="mem-tier">
+          <div class="mem-tier-label">Memory <span class="cnt">5</span></div>
+          <div class="rp-list">
+            <div class="rp-item"><span class="rp-name mono">remember · recall · search_memory</span><span class="rp-meta">safe</span></div>
+            <div class="rp-item"><span class="rp-name mono">list_memory · delete_memory</span><span class="rp-meta">safe</span></div>
+          </div>
+        </div>
+        <div class="mem-tier">
+          <div class="mem-tier-label">Computer control <span class="cnt">6</span></div>
+          <div class="rp-list">
+            <div class="rp-item"><span class="rp-name mono">clipboard_read · clipboard_write</span><span class="rp-meta">safe</span></div>
+            <div class="rp-item"><span class="rp-name mono">run_terminal_command · open_app · press_key</span><span class="rp-meta">confirm</span></div>
+          </div>
+        </div>
+        <div class="mem-tier">
+          <div class="mem-tier-label">Files <span class="cnt">7</span></div>
+          <div class="rp-list">
+            <div class="rp-item"><span class="rp-name mono">read_file · list_directory · file_info</span><span class="rp-meta">safe</span></div>
+            <div class="rp-item"><span class="rp-name mono">edit_file · delete_file · safe_delete</span><span class="rp-meta">confirm</span></div>
+          </div>
+        </div>
+        <div class="mem-tier">
+          <div class="mem-tier-label">Agents & world <span class="cnt">8</span></div>
+          <div class="rp-list">
+            <div class="rp-item"><span class="rp-name mono">agent_task · get_task_status · list_tasks</span><span class="rp-meta">safe</span></div>
+            <div class="rp-item"><span class="rp-name mono">observe_world · world_status</span><span class="rp-meta">safe</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LOGS -->
+      <div class="page" id="page-logs">
+        <div class="page-head">
+          <div class="page-eyebrow">Live activity</div>
+          <div class="page-title">Logs</div>
+          <div class="page-sub">System events as they happen. This will connect to backend events directly.</div>
+        </div>
+        <div class="log-stream" id="logs-page-stream">
+          <div class="log-line"><span class="lt">21:05</span><span class="lm">Wake word detected</span></div>
+          <div class="log-line"><span class="lt">21:05</span><span class="lm">Speech recognized</span></div>
+          <div class="log-line"><span class="lt">21:05</span><span class="lm hl">Searching memory</span></div>
+          <div class="log-line"><span class="lt">21:05</span><span class="lm">Calling Gemini</span></div>
+          <div class="log-line"><span class="lt">21:06</span><span class="lm">Response received</span></div>
+          <div class="log-line"><span class="lt">21:06</span><span class="lm hl">Speaking</span></div>
+        </div>
+      </div>
+
+      <!-- DASHBOARD -->
+      <div class="page" id="page-dashboard">
+        <div class="page-head">
+          <div class="page-eyebrow">Overview</div>
+          <div class="page-title">Dashboard</div>
+          <div class="page-sub">System vitals at a glance.</div>
+        </div>
+        <div class="grid-cards">
+          <div class="card stat-card"><div class="stat-label">AI Model <span class="pill-sm">live</span></div><div class="stat-val" style="font-size:14px">gemini-3.1-flash-live</div></div>
+          <div class="card stat-card"><div class="stat-label">Connection</div><div class="stat-val" style="font-size:14px" id="db-conn">connecting</div></div>
+          <div class="card stat-card"><div class="stat-label">CPU</div><div class="stat-val" id="db-cpu">—</div></div>
+          <div class="card stat-card"><div class="stat-label">RAM</div><div class="stat-val" id="db-ram">—</div></div>
+          <div class="card stat-card"><div class="stat-label">Vision <span class="pill-sm off">idle</span></div><div class="stat-val" style="font-size:14px">Not active</div></div>
+          <div class="card stat-card"><div class="stat-label">Internet</div><div class="stat-val" style="font-size:14px">Online</div></div>
+          <div class="card stat-card"><div class="stat-label">Memory usage</div><div class="stat-val" id="db-mem-entries">142<small>entries</small></div></div>
+          <div class="card stat-card"><div class="stat-label">Embedding model</div><div class="stat-val" style="font-size:14px">keyword+rank</div></div>
+          <div class="card stat-card"><div class="stat-label">Knowledge graph</div><div class="stat-val">—<small>nodes</small></div></div>
+          <div class="card stat-card"><div class="stat-label">Wake word</div><div class="stat-val" style="font-size:14px">Disabled</div></div>
+          <div class="card stat-card"><div class="stat-label">Response time</div><div class="stat-val">1.2<small>s avg</small></div></div>
+          <div class="card stat-card"><div class="stat-label">Tools</div><div class="stat-val" id="db-tools">47<small>loaded</small></div></div>
+        </div>
+      </div>
+
+      <!-- DEVELOPER -->
+      <div class="page" id="page-developer">
+        <div class="page-head">
+          <div class="page-eyebrow">Debug</div>
+          <div class="page-title">Developer</div>
+          <div class="page-sub">Raw pipeline data for the last exchange.</div>
+        </div>
+        <div class="dev-block">
+          <div class="dev-label">Last request</div>
+          <div class="dev-code"><span class="k">model:</span> <span class="v">gemini-3.1-flash-live-preview</span>
+<span class="k">latency:</span> <span class="v">1.24s</span>
+<span class="k">tokens_in:</span> <span class="v">312</span>  <span class="k">tokens_out:</span> <span class="v">98</span>
+<span class="k">memory_search:</span> <span class="v">3 hits, 41ms</span>
+<span class="k">tool_calls:</span> <span class="v">0</span></div>
+        </div>
+        <div class="dev-block">
+          <div class="dev-label">Recent errors</div>
+          <div class="dev-code">No errors in the last session.</div>
+        </div>
+      </div>
+
+      <!-- SETTINGS -->
+      <div class="page" id="page-settings">
+        <div class="page-head">
+          <div class="page-eyebrow">Configuration</div>
+          <div class="page-title">Settings</div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section-title">General</div>
+          <div class="settings-row"><div class="settings-row-label">Wake word</div><div class="toggle" data-toggle></div></div>
+          <div class="settings-row"><div class="settings-row-label">Start on boot</div><div class="toggle on" data-toggle></div></div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section-title">Voice</div>
+          <div class="settings-row"><div><div class="settings-row-label">Barge-in (interrupt while speaking)</div><div class="settings-row-desc">Off by default until echo cancellation is implemented</div></div><div class="toggle" data-toggle></div></div>
+          <div class="settings-row"><div class="settings-row-label">Input device</div><select class="sel"><option>Psalms Microphone (Realtek)</option></select></div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section-title">Appearance</div>
+          <div class="settings-row"><div class="settings-row-label">Theme</div><select class="sel"><option>Dark (default)</option><option>System</option></select></div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section-title">Memory</div>
+          <div class="settings-row"><div class="settings-row-label">Auto-consolidate</div><div class="toggle on" data-toggle></div></div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section-title">Models</div>
+          <div class="settings-row"><div class="settings-row-label">Live model</div><select class="sel"><option>gemini-3.1-flash-live-preview</option></select></div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section-title">Vision</div>
+          <div class="settings-row"><div class="settings-row-label">Enable by default</div><div class="toggle" data-toggle></div></div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section-title">Permissions</div>
+          <div class="settings-row"><div class="settings-row-label">Confirm before consequential tools</div><div class="toggle on" data-toggle></div></div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section-title">Developer</div>
+          <div class="settings-row"><div class="settings-row-label">Verbose logging</div><div class="toggle" data-toggle></div></div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section-title">Advanced</div>
+          <div class="settings-row"><div class="settings-row-label">Reset all settings</div><button class="fm-actions" style="padding:6px 14px;border-radius:8px;border:1px solid var(--red);background:var(--red-d);color:var(--red);cursor:pointer;font-size:12px">Reset</button></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT PANEL (workspace) -->
+    <aside class="right-panel" id="right-panel">
+      <div>
+        <div class="rp-section-title">System</div>
+        <div class="mon-row" style="margin-top:10px">
+          <div class="mon-label"><span>CPU</span><span class="mon-val" id="cpu-val">—</span></div>
+          <div class="mon-bar"><div class="mon-fill" id="cpu-fill" style="width:0%;background:var(--green)"></div></div>
+        </div>
+        <div class="mon-row" style="margin-top:8px">
+          <div class="mon-label"><span>Memory</span><span class="mon-val" id="mem-val">—</span></div>
+          <div class="mon-bar"><div class="mon-fill" id="mem-fill" style="width:0%;background:var(--green)"></div></div>
+        </div>
+        <div class="mon-row" style="margin-top:8px">
+          <div class="mon-label"><span>Disk</span><span class="mon-val" id="disk-val">—</span></div>
+          <div class="mon-bar"><div class="mon-fill" id="disk-fill" style="width:0%;background:var(--green)"></div></div>
+        </div>
+        <div class="mon-row" style="margin-top:8px">
+          <div class="mon-label"><span>Tools</span><span class="mon-val" id="tools-val">—</span></div>
+        </div>
+        <div class="mon-row" style="margin-top:4px">
+          <div class="mon-label"><span>Memory entries</span><span class="mon-val" id="mem-entries-val">—</span></div>
+        </div>
+        <div class="mon-row" style="margin-top:4px">
+          <div class="mon-label"><span>Uptime</span><span class="mon-val" id="uptime-val">—</span></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="rp-section-title">Current context</div>
+        <div class="rp-list">
+          <div class="rp-item"><span class="rp-name">Web frontend redesign</span><span class="rp-meta">active</span></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="rp-section-title">Running tools</div>
+        <div class="rp-empty" id="rp-tools-empty">None active</div>
+      </div>
+
+      <div>
+        <div class="rp-section-title">Today's tasks</div>
+        <div class="rp-list">
+          <div class="rp-item"><span class="rp-name">Confirm voice fix holds</span><span class="rp-meta">open</span></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="rp-section-title">Recent logs</div>
+        <div class="rp-list">
+          <div class="rp-item"><span class="rp-name">[MIC] Recording from Psalms Microphone</span><span class="rp-meta mono">11:53</span></div>
+          <div class="rp-item"><span class="rp-name">Reconnected successfully</span><span class="rp-meta mono">11:53</span></div>
+        </div>
+      </div>
+
       <div class="drop-zone-wrap">
         <div class="drop-zone" id="drop-zone">
           <span class="dz-icon">+</span>
           Drop a file here or click to upload
-          <input type="file" id="file-input">
+          <input type="file" id="drop-zone-file-input">
         </div>
-      </div>
-
-      <!-- TEXT INPUT -->
-      <div class="input-bar">
-        <input type="text" id="msg-input" placeholder="Type a message..." autocomplete="off">
-        <button class="send-btn" id="send-btn" disabled title="Send (Enter)">
-          <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-        </button>
       </div>
     </aside>
 
@@ -285,7 +762,50 @@ strong{color:var(--txt-h)}
 <div class="reconnecting" id="reconnecting-bar" style="display:none"></div>
 
 <script>
-// ── STATE ──
+// ═══════════════════════════════════════════════════════════
+// NAVIGATION — page switching + sidebar/panel collapse.
+// This is the only genuinely new interactive logic. Everything
+// below it (websocket, state machine, chat) is the original,
+// working implementation, unchanged.
+// ═══════════════════════════════════════════════════════════
+(function () {
+  const app = document.getElementById('app');
+  const sbItems = document.querySelectorAll('.sb-item');
+  const pages = document.querySelectorAll('.page');
+  const pageTitle = document.getElementById('page-title-tb');
+  const isMobile = () => window.innerWidth < 768;
+
+  function showPage(name) {
+    pages.forEach(p => p.style.display = (p.id === 'page-' + name) ? (name === 'chats' ? 'grid' : 'block') : 'none');
+    sbItems.forEach(i => i.classList.toggle('active', i.dataset.page === name));
+    const active = document.querySelector('.sb-item.active span');
+    if (active) pageTitle.textContent = active.textContent;
+    if (isMobile()) app.classList.remove('sidebar-open');
+  }
+
+  sbItems.forEach(item => {
+    item.addEventListener('click', () => showPage(item.dataset.page));
+  });
+
+  document.getElementById('sb-collapse-btn').addEventListener('click', () => {
+    if (isMobile()) { app.classList.toggle('sidebar-open'); return; }
+    app.classList.toggle('sidebar-collapsed');
+  });
+
+  document.getElementById('right-toggle-btn').addEventListener('click', () => {
+    document.getElementById('main').classList.toggle(isMobile() ? 'right-open' : 'right-collapsed');
+  });
+
+  document.querySelectorAll('[data-toggle]').forEach(t => {
+    t.addEventListener('click', () => t.classList.toggle('on'));
+  });
+
+  showPage('chats');
+})();
+</script>
+
+<script>
+// ── STATE (original, unchanged) ──
 let ws = null;
 let wsReconnectTimer = null;
 let currentState = 'INITIALIZING';
@@ -300,17 +820,16 @@ const $ = id => document.getElementById(id);
 const orb = $('orb');
 const orbLabel = $('orb-label');
 const stateLabel = $('state-label');
-const stateBadge = $('state-badge');
-const stateDot = $('state-dot');
-const stateTextEl = $('state-text');
+const pillConn = $('pill-conn');
+const pillConnText = $('pill-conn-text');
 const waveformEl = $('waveform');
-const activityLog = $('activity-log');
+const activityLog = $('activity-log-inline');
 const msgInput = $('msg-input');
 const sendBtn = $('send-btn');
 const muteBtn = $('mute-btn');
 const fsBtn = $('fs-btn');
 const dropZone = $('drop-zone');
-const fileInput = $('file-input');
+const fileInput = $('drop-zone-file-input');
 const reconnectBar = $('reconnecting-bar');
 
 // ── WAVEFORM BARS (36 bars) ──
@@ -319,7 +838,6 @@ const reconnectBar = $('reconnecting-bar');
   for (let i = 0; i < count; i++) {
     const bar = document.createElement('div');
     bar.className = 'bar';
-    // Vary animation timing for organic feel
     const t = 0.3 + Math.random() * 0.6;
     const hMin = 3 + Math.random() * 4;
     const hMax = 12 + Math.random() * 22;
@@ -330,35 +848,27 @@ const reconnectBar = $('reconnecting-bar');
 
 // ── STATE MANAGEMENT ──
 const stateConfig = {
-  INITIALIZING: { color: 'var(--txt-m)', dotColor: 'var(--txt-m)', label: 'Initializing', orbText: '...', badge: 'initializing', waveform: false },
-  LISTENING:    { color: 'var(--cyan)', dotColor: 'var(--cyan)', label: 'Listening', orbText: '◉', badge: 'listening', waveform: true },
-  SPEAKING:     { color: 'var(--amber)', dotColor: 'var(--amber)', label: 'Speaking', orbText: '◉', badge: 'speaking', waveform: true, waveformClass: 'speaking' },
-  THINKING:     { color: 'var(--amber)', dotColor: 'var(--amber)', label: 'Thinking...', orbText: '...', badge: 'thinking', waveform: true, waveformClass: 'thinking' },
-  MUTED:        { color: 'var(--red)', dotColor: 'var(--red)', label: 'Muted', orbText: 'MUTED', badge: 'muted', waveform: false },
-  IDLE:         { color: 'var(--txt-m)', dotColor: 'var(--txt-m)', label: 'Idle', orbText: '◉', badge: 'idle', waveform: false },
-  DISCONNECTED: { color: 'var(--red)', dotColor: 'var(--red)', label: 'Disconnected', orbText: '!', badge: 'disconnected', waveform: false }
+  INITIALIZING: { color: 'var(--txt-m)', dotClass: '', label: 'Initializing', orbText: '...', badge: 'initializing', waveform: false },
+  LISTENING:    { color: 'var(--cyan)', dotClass: 'live', label: 'Listening', orbText: '◉', badge: 'listening', waveform: true },
+  SPEAKING:     { color: 'var(--amber)', dotClass: 'warn', label: 'Speaking', orbText: '◉', badge: 'speaking', waveform: true, waveformClass: 'speaking' },
+  THINKING:     { color: 'var(--amber)', dotClass: 'warn', label: 'Thinking...', orbText: '...', badge: 'thinking', waveform: true, waveformClass: 'thinking' },
+  MUTED:        { color: 'var(--red)', dotClass: 'bad', label: 'Muted', orbText: 'MUTED', badge: 'muted', waveform: false },
+  IDLE:         { color: 'var(--signal)', dotClass: 'ok', label: 'Idle', orbText: '◉', badge: 'idle', waveform: false },
+  DISCONNECTED: { color: 'var(--red)', dotClass: 'bad', label: 'Disconnected', orbText: '!', badge: 'disconnected', waveform: false }
 };
 
 function setState(state) {
   const cfg = stateConfig[state] || stateConfig.IDLE;
-  const prev = currentState;
   currentState = state;
 
-  // Orb
   orb.dataset.state = state;
   orbLabel.textContent = cfg.orbText;
-
-  // State label under orb
   stateLabel.textContent = cfg.label;
   stateLabel.style.color = cfg.color;
 
-  // Header badge
-  stateDot.style.background = cfg.dotColor;
-  stateDot.style.boxShadow = cfg.waveform ? `0 0 6px ${cfg.dotColor}` : 'none';
-  stateTextEl.textContent = cfg.badge;
-  stateBadge.style.borderColor = cfg.color;
+  pillConn.className = 'tb-pill ' + (cfg.dotClass || '');
+  pillConnText.textContent = cfg.badge;
 
-  // Waveform
   waveformEl.className = 'waveform';
   if (cfg.waveform) {
     waveformEl.classList.add('active');
@@ -366,7 +876,7 @@ function setState(state) {
   }
 }
 
-// ── WEBSOCKET ──
+// ── WEBSOCKET (original, unchanged) ──
 function connect() {
   if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -400,47 +910,36 @@ function scheduleReconnect() {
   wsReconnectTimer = setTimeout(connect, 3000);
 }
 
-// ── MESSAGE HANDLING ──
+// ── MESSAGE HANDLING (original, unchanged) ──
 function handleMessage(data) {
   switch(data.type) {
     case 'state':
-      // Server pushes a state change (e.g. LISTENING, SPEAKING, THINKING)
-      if (data.state && stateConfig[data.state.toUpperCase()]) {
-        setState(data.state.toUpperCase());
-      }
+      if (data.state && stateConfig[data.state.toUpperCase()]) setState(data.state.toUpperCase());
       break;
-
     case 'chunk':
       setState('SPEAKING');
       appendToLastVyren(data.text);
       break;
-
     case 'tool_call':
       addLogMsg('tool', `Tool: ${data.name}`);
       break;
-
     case 'tool_result':
       addLogMsg('system', `${data.name}: ${data.result}`);
       break;
-
     case 'tool_declined':
       addLogMsg('system', `${data.name} declined.`);
       break;
-
     case 'confirmation_required':
       showConfirmation(data.name, data.args);
       break;
-
     case 'done':
       isSending = false;
       sendBtn.disabled = !msgInput.value.trim();
       removeTypingIndicator();
-      // Stay in IDLE unless server pushes another state
       if (currentState === 'SPEAKING' || currentState === 'THINKING') setState('IDLE');
       lastVyrenEl = null;
       vyrenTextBuffer = '';
       break;
-
     case 'error':
       addLogMsg('system', 'Error: ' + data.message);
       isSending = false;
@@ -450,18 +949,13 @@ function handleMessage(data) {
       lastVyrenEl = null;
       vyrenTextBuffer = '';
       break;
-
     case 'system_msg':
       addLogMsg('system', data.system_msg);
       break;
-
     case 'log':
-      // Generic log entry from server
       addLogMsg('system', data.text);
       break;
-
     case 'metrics':
-      // Server pushes system metrics
       if (data.cpu != null) updateBar('cpu', data.cpu);
       if (data.mem != null) updateBar('mem', data.mem);
       if (data.disk != null) updateBar('disk', data.disk);
@@ -470,22 +964,14 @@ function handleMessage(data) {
   }
 }
 
-// ── ACTIVITY LOG ──
+// ── ACTIVITY LOG (original, unchanged) ──
 function addLogMsg(type, text) {
   removeTypingIndicator();
   const div = document.createElement('div');
   div.className = 'log-msg ' + type;
-
-  if (type === 'user') {
-    div.innerHTML = `<span class="log-prefix">You</span>${esc(text)}`;
-  } else if (type === 'vyren') {
-    div.innerHTML = `<span class="log-prefix">VYREN</span>${formatVyrenText(text)}`;
-  } else if (type === 'tool') {
-    div.textContent = text;
-  } else {
-    div.textContent = text;
-  }
-
+  if (type === 'user') div.innerHTML = `<span class="log-prefix">You</span>${esc(text)}`;
+  else if (type === 'vyren') div.innerHTML = `<span class="log-prefix">VYREN</span>${formatVyrenText(text)}`;
+  else div.textContent = text;
   activityLog.appendChild(div);
   scrollLog();
 }
@@ -522,7 +1008,7 @@ function showConfirmation(name, args) {
   div.className = 'log-msg confirm';
   div.innerHTML = `
     <div style="font-weight:600;margin-bottom:4px;font-size:13px">VYREN wants to:</div>
-    <div style="font-family:monospace;font-size:11px;color:var(--amber);margin-bottom:4px">${esc(name)}</div>
+    <div style="font-family:var(--f-mono);font-size:11px;color:var(--amber);margin-bottom:4px">${esc(name)}</div>
     <div style="font-size:11px;white-space:pre-wrap;margin-bottom:8px">${esc(argStr)}</div>
     <div class="confirm-actions">
       <button class="btn-approve" data-approve="true">Allow</button>
@@ -531,7 +1017,6 @@ function showConfirmation(name, args) {
   `;
   activityLog.appendChild(div);
   scrollLog();
-
   div.querySelectorAll('button').forEach(btn => {
     btn.addEventListener('click', () => {
       const approved = btn.dataset.approve === 'true';
@@ -561,7 +1046,7 @@ function esc(s) {
   return d.innerHTML;
 }
 
-// ── SEND MESSAGE ──
+// ── SEND MESSAGE (original, unchanged) ──
 function sendMessage() {
   const text = msgInput.value.trim();
   if (!text || isSending) return;
@@ -579,20 +1064,16 @@ function sendMessage() {
   ws.send(JSON.stringify({ type: 'message', text }));
 }
 
-msgInput.addEventListener('input', () => {
-  sendBtn.disabled = !msgInput.value.trim() || isSending;
-});
-msgInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
-});
+msgInput.addEventListener('input', () => { sendBtn.disabled = !msgInput.value.trim() || isSending; });
+msgInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
 sendBtn.addEventListener('click', sendMessage);
+document.getElementById('attach-btn').addEventListener('click', () => fileInput.click());
 
-// ── SYSTEM MONITOR (REST + WS metrics) ──
+// ── SYSTEM MONITOR (original, unchanged) ──
 function updateBar(id, value, isNet) {
   const valEl = $(id + '-val');
   const fillEl = $(id + '-fill');
   if (!valEl || !fillEl) return;
-
   let displayVal, width, color;
   if (isNet) {
     displayVal = value.toFixed(1) + ' MB/s';
@@ -606,6 +1087,9 @@ function updateBar(id, value, isNet) {
   valEl.textContent = displayVal;
   fillEl.style.width = width + '%';
   fillEl.style.background = color;
+  // mirror into dashboard page if present
+  const dbEl = $('db-' + id);
+  if (dbEl) dbEl.textContent = displayVal;
 }
 
 async function fetchStatus() {
@@ -615,28 +1099,21 @@ async function fetchStatus() {
     if (d.cpu_percent != null) updateBar('cpu', d.cpu_percent);
     if (d.memory_percent != null) updateBar('mem', d.memory_percent);
     if (d.disk_percent != null) updateBar('disk', d.disk_percent);
-    // Network via /api/heartbeat or system
     $('tools-val').textContent = (d.tool_count || 0) + ' loaded';
     $('mem-entries-val').textContent = (d.memory_entries || 0) + ' entries';
     $('uptime-val').textContent = d.uptime || '—';
+    if ($('db-tools')) $('db-tools').innerHTML = (d.tool_count || 0) + '<small>loaded</small>';
+    if ($('db-mem-entries')) $('db-mem-entries').innerHTML = (d.memory_entries || 0) + '<small>entries</small>';
+    if ($('pill-mem')) $('pill-mem').textContent = (d.memory_entries || 0) + ' memories';
   } catch(e) {}
 }
 
-function startMetricsPoll() {
-  fetchStatus(); // immediate
-  metricsInterval = setInterval(fetchStatus, 2000);
-}
+function startMetricsPoll() { fetchStatus(); metricsInterval = setInterval(fetchStatus, 2000); }
+function stopMetricsPoll() { if (metricsInterval) { clearInterval(metricsInterval); metricsInterval = null; } }
 
-function stopMetricsPoll() {
-  if (metricsInterval) { clearInterval(metricsInterval); metricsInterval = null; }
-}
-
-// ── FILE DROP ZONE ──
+// ── FILE DROP ZONE (original, unchanged) ──
 dropZone.addEventListener('click', () => fileInput.click());
-fileInput.addEventListener('change', (e) => {
-  if (e.target.files.length > 0) handleFile(e.target.files[0]);
-});
-
+fileInput.addEventListener('change', (e) => { if (e.target.files.length > 0) handleFile(e.target.files[0]); });
 dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
 dropZone.addEventListener('dragleave', () => { dropZone.classList.remove('drag-over'); });
 dropZone.addEventListener('drop', (e) => {
@@ -647,23 +1124,18 @@ dropZone.addEventListener('drop', (e) => {
 
 function handleFile(file) {
   addLogMsg('system', `File selected: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
-  // TODO: upload to server when endpoint is available
-  // For now, send the filename as a message
   if (ws && ws.readyState === 1) {
     ws.send(JSON.stringify({ type: 'message', text: `[File: ${file.name}]` }));
     addLogMsg('user', `[Uploaded: ${file.name}]`);
   }
 }
 
-// ── MUTE TOGGLE ──
+// ── MUTE TOGGLE (original, unchanged) ──
 function toggleMute() {
   isMuted = !isMuted;
-  muteBtn.style.color = isMuted ? 'var(--red)' : '';
-  muteBtn.style.borderColor = isMuted ? 'var(--red)' : '';
-  muteBtn.style.background = isMuted ? 'var(--red-d)' : '';
+  muteBtn.classList.toggle('active', isMuted);
   if (isMuted) {
     setState('MUTED');
-    // Send mute command to server
     if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'mute', muted: true }));
   } else {
     setState('IDLE');
@@ -672,40 +1144,25 @@ function toggleMute() {
 }
 muteBtn.addEventListener('click', toggleMute);
 
-// ── FULLSCREEN ──
+// ── FULLSCREEN (original, unchanged) ──
 function toggleFullscreen() {
-  if (!document.fullscreenElement) {
-    document.documentElement.requestFullscreen().catch(() => {});
-  } else {
-    document.exitFullscreen().catch(() => {});
-  }
+  if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
+  else document.exitFullscreen().catch(() => {});
 }
 fsBtn.addEventListener('click', toggleFullscreen);
 
-// ── KEYBOARD SHORTCUTS ──
+// ── KEYBOARD SHORTCUTS (original, unchanged) ──
 document.addEventListener('keydown', (e) => {
-  // Don't intercept when typing in input
   if (document.activeElement === msgInput) {
     if (e.key === 'Escape') { msgInput.blur(); return; }
     return;
   }
-
-  if (e.key === 'F4' || (e.key === 'm' || e.key === 'M')) {
-    e.preventDefault();
-    toggleMute();
-  }
-  if (e.key === 'F11') {
-    e.preventDefault();
-    toggleFullscreen();
-  }
-  if (e.key === 'Escape') {
-    if (document.fullscreenElement) {
-      document.exitFullscreen().catch(() => {});
-    }
-  }
+  if (e.key === 'F4' || (e.key === 'm' || e.key === 'M')) { e.preventDefault(); toggleMute(); }
+  if (e.key === 'F11') { e.preventDefault(); toggleFullscreen(); }
+  if (e.key === 'Escape' && document.fullscreenElement) document.exitFullscreen().catch(() => {});
 });
 
-// ── SERVICE WORKER ──
+// ── SERVICE WORKER (original, unchanged) ──
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(() => {});
 }

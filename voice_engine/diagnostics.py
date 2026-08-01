@@ -18,7 +18,7 @@ import logging
 import threading
 import time
 
-logger = logging.getLogger("voice.engine")
+logger = logging.getLogger("vyren.voice.engine")
 
 # Global counters — updated from multiple threads, read from supervisor
 _counters_lock = threading.Lock()

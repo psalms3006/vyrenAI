@@ -69,7 +69,7 @@ from voice_engine.protocol import (
 )
 from voice_engine import diagnostics as diag
 
-logger = logging.getLogger("voice.engine")
+logger = logging.getLogger("vyren.voice.engine")
 
 # Sentinel pushed into the playback bridge queue to mean "an interruption
 # happened — drop everything queued and hard-stop the hardware buffer now."
@@ -107,6 +107,7 @@ class GeminiLiveVoiceEngine:
         # "LISTENING" state until Gemini's own turn_complete arrives.
         self._local_talk_streak = 0
         self._local_silence_streak = 0
+        self._barge_in_streak = 0
 
         # Speaking state — accessed from mic callback (sounddevice thread)
         # and from async tasks. CPython GIL makes bool reads atomic, so
@@ -120,6 +121,15 @@ class GeminiLiveVoiceEngine:
         # SessionResumptionConfig on the NEXT connect so a reconnect
         # actually resumes prior context instead of starting fresh.
         self._resumption_handle: str | None = None
+        self._go_away_pending: bool = False
+        # Set when the speaker has actually finished rendering everything
+        # queued (not when Gemini's turn_complete arrives — those are
+        # different moments, sometimes seconds apart, because turn_complete
+        # fires the instant Gemini finishes GENERATING, while _play_q can
+        # still hold several seconds of audio the speaker hasn't played
+        # yet). Mic reactivation waits on this, not on turn_complete.
+        self._playback_drained = threading.Event()
+        self._playback_drained.set()  # nothing queued yet
 
         # State machine
         self._state = VoiceState.BOOTING
@@ -405,6 +415,7 @@ class GeminiLiveVoiceEngine:
         ) as session:
             self._session = session
             self._loop = asyncio.get_event_loop()
+            self._go_away_pending = False
 
             diag.log_connected()
             if self._reconnect_attempt > 0:
@@ -517,6 +528,21 @@ class GeminiLiveVoiceEngine:
         while self._active and not self._stop_event.is_set():
             await asyncio.sleep(self._supervisor_interval)
 
+            # GoAway already told us the server is closing this session.
+            # Exit the `async with client.aio.live.connect(...)` block on
+            # our own terms now, while the socket is still alive, instead
+            # of waiting for the server to force-close it — that force
+            # close is what produces the 1008 policy-violation errors.
+            # The outer reconnect loop resumes via self._resumption_handle.
+            if self._go_away_pending:
+                logger.info(
+                    "[SUPERVISOR] GoAway pending — closing session proactively "
+                    "for clean reconnect (resumption_handle=%s)",
+                    "present" if self._resumption_handle else "none",
+                )
+                diag.log_disconnected("go_away: proactive close")
+                return
+
             # Check each worker
             for name, info in list(self._workers.items()):
                 task = info["task"]
@@ -536,6 +562,7 @@ class GeminiLiveVoiceEngine:
                             "1011" in exc_str          # keepalive ping timeout
                             or "1006" in exc_str       # abnormal closure
                             or "1007" in exc_str       # protocol error (bad config)
+                            or "1008" in exc_str       # policy violation — GoAway close, not a worker bug
                             or "connection closed" in exc_str
                             or "websocket" in exc_str
                         )
@@ -648,6 +675,16 @@ class GeminiLiveVoiceEngine:
                 except Exception:
                     rms = self._config.barge_in_rms_threshold  # fail open
                 if rms < self._config.barge_in_rms_threshold:
+                    self._barge_in_streak = 0
+                    return
+                # A single loud frame is cheap to produce from bleed/pop
+                # noise; require several in a row before treating it as
+                # a real interruption. This is on the local mic->send
+                # gate only — it doesn't affect Gemini's own VAD, it
+                # just avoids handing Gemini a burst of one frame that
+                # could be a false trigger.
+                self._barge_in_streak += 1
+                if self._barge_in_streak < 3:
                     return
             else:
                 too_soon = (time.time() - self._last_speak_end) < 0.15
@@ -678,6 +715,41 @@ class GeminiLiveVoiceEngine:
             )
 
         try:
+            # Identify what device we're actually about to record from.
+            # sd.InputStream() with no `device=` arg silently opens
+            # whatever the OS calls its current default input — on
+            # Windows that can be "Stereo Mix" / "What U Hear" / a
+            # virtual loopback cable if one was ever set as default
+            # (common after installing streaming/recording software).
+            # That device doesn't record the room — it records whatever
+            # is currently being PLAYED, i.e. VYREN's own voice, byte
+            # for byte. That produces a self-conversation that's
+            # completely deterministic and immune to headphones, which
+            # is exactly the pattern in your logs. Refuse to proceed on
+            # a device that looks like that instead of silently talking
+            # to itself forever.
+            try:
+                dev_info = sd.query_devices(kind="input")
+                dev_name = dev_info.get("name", "unknown")
+            except Exception:
+                dev_name = "unknown (could not query)"
+
+            _LOOPBACK_MARKERS = (
+                "stereo mix", "what u hear", "wave out", "loopback",
+                "cable output", "voicemeeter",
+            )
+            if any(m in dev_name.lower() for m in _LOOPBACK_MARKERS):
+                raise RuntimeError(
+                    f"Input device '{dev_name}' looks like a system-audio "
+                    f"loopback/monitor device, not a real microphone. "
+                    f"Recording from it means VYREN would hear its own "
+                    f"speech, not you — that's the self-conversation bug. "
+                    f"Set a real microphone as your Windows default "
+                    f"recording device (Settings > Sound > Input) and "
+                    f"restart VYREN."
+                )
+            logger.info("[MIC] Recording from input device: '%s'", dev_name)
+
             stream = sd.InputStream(
                 samplerate=self._config.send_sample_rate,
                 channels=self._config.channels,
@@ -813,6 +885,7 @@ class GeminiLiveVoiceEngine:
                             "[SESSION] GoAway received — server closing this "
                             "session soon (time_left=%s)", time_left,
                         )
+                        self._go_away_pending = True
 
                     # --- Session resumption handle: capture it so the
                     # NEXT connect (_build_session_config) can resume this
@@ -883,11 +956,21 @@ class GeminiLiveVoiceEngine:
 
                             diag.log_turn_complete(full_in, full_out)
 
-                            # Reset speaking state → mic resumes
-                            self._is_speaking = False
-                            self._last_speak_end = time.time()
-                            self.set_state(VoiceState.LISTENING)
-                            diag.log_listening()
+                            # NOTE: mic/state reactivation deliberately does
+                            # NOT happen here. turn_complete fires the
+                            # instant Gemini finishes GENERATING — the
+                            # speaker can still have seconds of audio
+                            # queued in _play_q. Flipping _is_speaking here
+                            # reactivates a full-volume mic while VYREN is
+                            # still audibly talking, which is what let
+                            # VYREN's own tail-end audio get picked back up
+                            # and re-sent to Gemini as a fresh "user" turn
+                            # (self-transcription) and made a single
+                            # response look like several turns. See
+                            # _await_playback_drain_then_listen().
+                            asyncio.ensure_future(
+                                self._await_playback_drain_then_listen()
+                            )
 
                             # Notify assistant
                             if self._callbacks.on_turn_complete:
@@ -925,6 +1008,46 @@ class GeminiLiveVoiceEngine:
     # ------------------------------------------------------------------
     # Tool execution
     # ------------------------------------------------------------------
+
+    async def _await_playback_drain_then_listen(self):
+        """Reactivate the mic/state only once the speaker has actually
+        finished playing, not when Gemini's turn_complete event fires.
+
+        Runs as its own task so it never blocks the receiver's read loop
+        (a blocked receiver loop is exactly what stops keepalive pongs
+        from going out and produces 1011 timeouts, so this must stay
+        off that path). Bounded wait so a stuck stream can't mute VYREN
+        forever; self-checks against a new turn already having started
+        so it never clobbers state that's already moved on.
+        """
+        loop = asyncio.get_event_loop()
+        try:
+            await asyncio.wait_for(
+                loop.run_in_executor(None, self._playback_drained.wait),
+                timeout=15.0,
+            )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "[AUDIO] Playback drain wait timed out after 15s — "
+                "reactivating mic anyway to avoid a permanently muted session."
+            )
+
+        # A little headroom for whatever's still in the hardware buffer
+        # after the last write() call returned (blocksize=4800 @ 24kHz,
+        # "low" latency — tens of ms, not seconds, but real).
+        await asyncio.sleep(0.12)
+
+        if self._is_speaking:
+            # A new turn's audio already started arriving while we were
+            # waiting — that path owns the state now, don't step on it.
+            return
+        if not self._active:
+            return
+
+        self._last_speak_end = time.time()
+        self.set_state(VoiceState.LISTENING)
+        diag.log_speech_ended()
+        diag.log_listening()
 
     async def _handle_tool_calls(self, function_calls):
         """Execute tool calls via the assistant callback with timeout."""
@@ -1012,7 +1135,13 @@ class GeminiLiveVoiceEngine:
             stream.start()
             try:
                 while True:
-                    chunk = _play_q.get()
+                    try:
+                        chunk = _play_q.get(timeout=0.05)
+                    except _q.Empty:
+                        # Nothing pending and nothing in flight — playback
+                        # is genuinely caught up.
+                        self._playback_drained.set()
+                        continue
                     if chunk is None:
                         break
                     if chunk is _FLUSH:
@@ -1029,7 +1158,12 @@ class GeminiLiveVoiceEngine:
                             stream.start()
                         except Exception:
                             pass
+                        self._playback_drained.set()
                         continue
+                    # A real chunk is about to be written to hardware —
+                    # playback is definitively NOT drained until this
+                    # (and anything queued behind it) has been played.
+                    self._playback_drained.clear()
                     try:
                         if isinstance(chunk, bytes):
                             stream.write(chunk)
@@ -1039,9 +1173,12 @@ class GeminiLiveVoiceEngine:
                             stream.write(bytes(chunk))
                     except Exception:
                         pass
+                    if _play_q.empty():
+                        self._playback_drained.set()
             finally:
                 stream.stop()
                 stream.close()
+                self._playback_drained.set()
 
         _pt = threading.Thread(target=_play_worker, daemon=True, name="AudioPlay")
         _pt.start()

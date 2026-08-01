@@ -203,7 +203,21 @@ class VoiceEngineConfig:
     # avoid re-triggering off VYREN's own voice bleeding into the mic on
     # speaker setups without hardware echo cancellation; use headphones for
     # the cleanest barge-in.
-    barge_in_enabled: bool = True
+    # Default OFF: full-duplex barge-in requires the mic to stay live
+    # while VYREN is speaking, gated only by loudness. On setups where
+    # the mic picks up VYREN's own output strongly enough (speaker
+    # bleed, dual output routing, etc.), that gate isn't enough — Gemini's
+    # own server-side VAD sees the bleed as a real interruption and reacts
+    # to it *instantly* via the sc.interrupted path, which bypasses local
+    # gating entirely by design (a real interruption should be instant).
+    # There's no cheap fix for that without actual acoustic echo
+    # cancellation (referencing the outgoing signal and subtracting it
+    # from the mic input), which isn't implemented. Until it is, mic-off-
+    # while-speaking is the only setting that's guaranteed correct on
+    # every setup. Set True only once AEC exists, or if you've confirmed
+    # your specific hardware doesn't bleed (e.g. headset mic physically
+    # far from any speaker, single active output device).
+    barge_in_enabled: bool = False
     barge_in_rms_threshold: int = 900  # int16 RMS floor to count as "real" speech
 
     # Mic heartbeat: if no frames queued in this many seconds, mic is dead

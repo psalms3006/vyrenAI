@@ -191,7 +191,7 @@ class WebServer:
                 "hostname": platform.node(),
                 "os": f"{platform.system()} {platform.release()}",
                 "tool_count": len(ctx.get("registry", type('o', (), {'tool_names': lambda: []})()).tool_names()),
-                "memory_entries": ctx["memory"].count() if ctx.get("memory") else 0,
+                "memory_entries": ctx["memory_v2"].count() if ctx.get("memory_v2") else 0,
                 "ollama_available": connectivity.status.ollama_available if connectivity else False,
                 "connectivity": conn_status,
                 "voice_active": (ctx.get("voice_runtime") and ctx["voice_runtime"].is_active) or False,
@@ -199,7 +199,7 @@ class WebServer:
 
         @app.get("/api/memory")
         async def get_memory():
-            mem = ctx.get("memory")
+            mem = ctx.get("memory_v2")
             if mem:
                 return mem.list_all()
             return []
@@ -329,7 +329,7 @@ class WebServer:
                                 })
                             continue
                         elif text == "/memory":
-                            mem = ctx.get("memory")
+                            mem = ctx.get("memory_v2")
                             if mem:
                                 facts = mem.list_all()
                                 if not facts:
