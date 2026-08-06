@@ -39,7 +39,7 @@ to change.
 
 Rotation / anti-repetition
 ---------------------------
-~/.vyren/greeting_history.json stores the last _MAX_HISTORY entries as
+`data_dir/greeting_history.json` stores the last _MAX_HISTORY entries as
 {hash, category, ts}. Category selection is weighted away from
 recently-used categories (not just exact-text dedup), so the topic
 mix feels fresh over weeks/months, not just turn to turn. The file is
@@ -60,7 +60,9 @@ from typing import Optional
 
 logger = logging.getLogger("vyren.brain.greeting_engine")
 
-_HISTORY_PATH = Path(os.path.expanduser("~/.vyren/greeting_history.json"))
+from platform_paths import get_greeting_history_path, get_vyren_dir
+
+_HISTORY_PATH = get_greeting_history_path()
 _MAX_HISTORY = 40
 _DATA_DIR = Path(__file__).parent / "data"
 _BANK_PATH = _DATA_DIR / "greeting_bank.json"
@@ -169,7 +171,12 @@ class SystemContextProvider(GreetingProvider):
         from brain import greetings as legacy
 
         signals = legacy._gather_signals(services)
-        opening = legacy._pick_opening(signals["time_of_day"], signals["hour"], signals["minute"])
+        try:
+            from identity import get_assistant_name
+            assistant_name = get_assistant_name()
+        except Exception:
+            assistant_name = "VYREN"
+        opening = legacy._pick_opening(signals["time_of_day"], signals["hour"], signals["minute"], assistant_name=assistant_name)
         context = legacy._pick_context(signals)
         fragment = opening if not context else f"{opening} {context}"
         return GreetingContent(category="system_context", fragment=fragment)
@@ -202,7 +209,7 @@ class ProjectStatusProvider(GreetingProvider):
                 pass
 
         try:
-            repo_root = Path(__file__).resolve().parent.parent
+            repo_root = get_vyren_dir()
             result = subprocess.run(
                 ["git", "status", "--porcelain"],
                 cwd=repo_root, capture_output=True, text=True, timeout=2,

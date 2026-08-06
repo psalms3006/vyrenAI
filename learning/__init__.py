@@ -6,8 +6,11 @@ user habits, coding style, workflow preferences. Learning is transparent
 and controllable -- the user can inspect, disable, or reset learning.
 """
 
+from __future__ import annotations
+
 import json
 import logging
+import math
 import os
 import time
 from dataclasses import dataclass, field
@@ -16,26 +19,40 @@ from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger("vyren.learning")
+from platform_paths import get_learning_dir
 
-LEARN_DIR = Path(os.path.expanduser("~/.vyren/learning"))
+LEARN_DIR = get_learning_dir()
+
+
+def _cosine_similarity(a: list[float], b: list[float]) -> float:
+    if not a or not b:
+        return 0.0
+    dot = sum(x * y for x, y in zip(a, b))
+    norm_a = math.sqrt(sum(x * x for x in a)) or 1.0
+    norm_b = math.sqrt(sum(x * x for x in b)) or 1.0
+    return dot / (norm_a * norm_b)
 
 
 @dataclass
 class Lesson:
-    """A single learned lesson."""
+    """A single learned lesson with retrieval metadata."""
     id: str
     category: str          # mistake, preference, pattern, correction, workflow
     content: str
     context: str = ""      # What was happening when this was learned
     confidence: float = 0.5
     created: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     reinforced: int = 0    # Times this lesson was reinforced
     applied: int = 0       # Times this lesson was applied
+    applied_successfully: int = 0
     tags: list[str] = field(default_factory=list)
+    embedding: list[float] | None = None
+    decay_half_life_days: float = 60.0
 
 
 class LessonStore:
-    """Persistent lesson storage."""
+    """Persistent lesson storage with confidence-aware retrieval."""
 
     def __init__(self):
         LEARN_DIR.mkdir(parents=True, exist_ok=True)
@@ -49,7 +66,8 @@ class LessonStore:
                 with open(self.path, "r", encoding="utf-8") as f:
                     data = json.load(f)
                 for lid, ld in data.items():
-                    self._lessons[lid] = Lesson(**{k: v for k, v in ld.items() if k in Lesson.__dataclass_fields__})
+                    fields = {k: v for k, v in ld.items() if k in Lesson.__dataclass_fields__}
+                    self._lessons[lid] = Lesson(**fields)
             except Exception:
                 self._lessons = {}
 
@@ -68,18 +86,40 @@ class LessonStore:
         if lesson:
             lesson.reinforced += 1
             lesson.confidence = min(1.0, lesson.confidence + 0.05)
+            lesson.updated = datetime.now(timezone.utc).isoformat()
             self._save()
+
+    def record_application(self, lesson_id: str, success: bool):
+        lesson = self._lessons.get(lesson_id)
+        if lesson:
+            lesson.applied += 1
+            if success:
+                lesson.applied_successfully += 1
+                lesson.confidence = min(1.0, lesson.confidence + 0.03)
+            lesson.updated = datetime.now(timezone.utc).isoformat()
+            self._save()
+
+    def _effective_confidence(self, lesson: Lesson) -> float:
+        try:
+            updated = datetime.fromisoformat(lesson.updated)
+        except ValueError:
+            return lesson.confidence
+        age_days = max(0.0, (datetime.now(timezone.utc) - updated).total_seconds() / 86400.0)
+        decay = 2 ** (-age_days / lesson.decay_half_life_days)
+        return max(0.0, lesson.confidence * decay)
 
     def search(self, query: str, limit: int = 10) -> list[Lesson]:
         query_lower = query.lower()
-        results = []
+        results: list[tuple[float, Lesson]] = []
         for l in self._lessons.values():
             if query_lower in l.content.lower() or query_lower in l.context.lower():
-                results.append(l)
+                score = self._effective_confidence(l) * (1 + l.reinforced * 0.1)
+                results.append((score, l))
             elif any(query_lower in t.lower() for t in l.tags):
-                results.append(l)
-        results.sort(key=lambda x: -x.confidence * (1 + x.reinforced * 0.1))
-        return results[:limit]
+                score = self._effective_confidence(l) * (1 + l.reinforced * 0.1)
+                results.append((score, l))
+        results.sort(key=lambda x: -x[0])
+        return [l for _, l in results[:limit]]
 
     def get_by_category(self, category: str) -> list[Lesson]:
         return [l for l in self._lessons.values() if l.category == category]
@@ -124,7 +164,7 @@ class Learner:
             tags=["correction", "user_feedback"],
         )
         self.store.add(lesson)
-        logger.info(f"Learned from correction: {correction[:60]}")
+        logger.info("Learned from correction: %s", correction[:60])
 
     def learn_preference(self, preference: str, context: str = ""):
         """Learn a user preference."""
@@ -137,7 +177,7 @@ class Learner:
             tags=["preference"],
         )
         self.store.add(lesson)
-        logger.info(f"Learned preference: {preference[:60]}")
+        logger.info("Learned preference: %s", preference[:60])
 
     def learn_mistake(self, mistake: str, correct_approach: str, context: str = ""):
         """Learn from a mistake VYREN made."""
@@ -150,7 +190,7 @@ class Learner:
             tags=["mistake"],
         )
         self.store.add(lesson)
-        logger.info(f"Learned from mistake: {mistake[:60]}")
+        logger.info("Learned from mistake: %s", mistake[:60])
 
     def learn_pattern(self, pattern: str, context: str = ""):
         """Learn a behavioral pattern observed in the user."""
@@ -163,7 +203,7 @@ class Learner:
             tags=["pattern", "observation"],
         )
         self.store.add(lesson)
-        logger.info(f"Learned pattern: {pattern[:60]}")
+        logger.info("Learned pattern: %s", pattern[:60])
 
     def get_relevant_lessons(self, query: str, limit: int = 5) -> list[str]:
         """Get lessons relevant to the current context."""

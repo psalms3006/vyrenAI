@@ -3,8 +3,11 @@ planner/ -- Goal decomposition and multi-step planning.
 
 The planner behaves like a senior engineer: it breaks goals into milestones,
 estimates complexity, identifies dependencies, chooses tools, and monitors
-execution. It supports dynamic replanning when things go wrong.
+execution. It supports dynamic replanning when things go wrong and learns
+from past outcomes to improve future plans.
 """
+
+from __future__ import annotations
 
 import logging
 import time
@@ -17,8 +20,9 @@ from pathlib import Path
 from typing import Any, Callable
 
 logger = logging.getLogger("vyren.planner")
+from platform_paths import get_plans_dir
 
-PLAN_DIR = Path(os.path.expanduser("~/.vyren/plans"))
+PLAN_DIR = get_plans_dir()
 
 
 class PlanStatus(str, Enum):
@@ -52,6 +56,7 @@ class PlanStep:
     dependencies: list[str] = field(default_factory=list)
     verification: str = ""   # How to verify this step succeeded
     notes: str = ""
+    lessons_applied: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -68,6 +73,7 @@ class Plan:
     reasoning_mode: str = "fast"
     context: dict = field(default_factory=dict)
     reflection: str = ""
+    metadata: dict = field(default_factory=dict)
 
 
 class PlanStore:
@@ -100,6 +106,7 @@ class PlanStore:
             "completed_steps": plan.completed_steps, "failed_steps": plan.failed_steps,
             "total_estimated_time": plan.total_estimated_time,
             "reasoning_mode": plan.reasoning_mode, "reflection": plan.reflection,
+            "metadata": plan.metadata,
             "steps": [
                 {
                     "id": s.id, "description": s.description, "status": s.status.value,
@@ -107,7 +114,7 @@ class PlanStore:
                     "expected_outcome": s.expected_outcome, "actual_outcome": s.actual_outcome,
                     "complexity": s.complexity, "estimated_time": s.estimated_time,
                     "dependencies": s.dependencies, "verification": s.verification,
-                    "notes": s.notes,
+                    "notes": s.notes, "lessons_applied": s.lessons_applied,
                 }
                 for s in plan.steps
             ],
@@ -141,10 +148,10 @@ class PlanStore:
 
 class Planner:
     """
-    Goal decomposition and execution planner.
+    Goal decomposition and execution planner with self-improvement.
 
     Usage:
-        planner = Planner(store)
+        planner = Planner(store, ctx=ctx)
 
         # Create a plan from a goal
         plan = planner.create_plan("Build a REST API for the todo app")
@@ -172,7 +179,7 @@ class Planner:
             status=PlanStatus.DRAFT,
         )
         self.store.save(plan)
-        logger.info(f"Created plan {plan_id}: {goal[:80]}")
+        logger.info("Created plan %s: %s", plan_id, goal[:80])
         return plan
 
     def add_step(self, plan: Plan, description: str, tool: str = "",
@@ -201,7 +208,6 @@ class Planner:
         for step in plan.steps:
             if step.status != StepStatus.PENDING:
                 continue
-            # Check dependencies
             unmet = [d for d in step.dependencies if d not in completed_ids]
             if unmet:
                 step.status = StepStatus.BLOCKED
@@ -210,7 +216,7 @@ class Planner:
         return None
 
     def execute_step(self, plan: Plan, step: PlanStep) -> str:
-        """Execute a plan step using the registry."""
+        """Execute a plan step using the registry and record outcomes."""
         if not self.ctx:
             return "Error: No context available for execution."
 
@@ -219,6 +225,10 @@ class Planner:
         self.store.save(plan)
 
         try:
+            # Apply learned lessons when relevant.
+            applied_lessons = self._apply_lessons(step)
+            step.lessons_applied = applied_lessons
+
             if step.tool and self.ctx.registry:
                 result = self.ctx.registry.execute(step.tool, step.tool_args)
             else:
@@ -227,22 +237,25 @@ class Planner:
             step.actual_outcome = result[:500]
             step.status = StepStatus.COMPLETED
             plan.completed_steps += 1
+            self._record_success(plan, step)
         except Exception as e:
             step.actual_outcome = f"Error: {type(e).__name__} -- {e}"
             step.status = StepStatus.FAILED
             plan.failed_steps += 1
+            self._record_failure(plan, step)
 
         plan.updated = datetime.now(timezone.utc).isoformat()
         self.store.save(plan)
         return step.actual_outcome
 
     def replan(self, plan: Plan, failed_step: PlanStep) -> list[PlanStep]:
-        """Generate recovery steps after a failure."""
+        """Generate recovery steps after a failure using lessons."""
         recovery = PlanStep(
             id=self._next_id(),
             description=f"Recovery: Fix failure in '{failed_step.description}'",
             complexity="high",
             notes=f"Original error: {failed_step.actual_outcome[:200]}",
+            lessons_applied=self._suggest_recovery_lessons(failed_step),
         )
         plan.steps.append(recovery)
         plan.updated = datetime.now(timezone.utc).isoformat()
@@ -250,12 +263,21 @@ class Planner:
         return [recovery]
 
     def complete_plan(self, plan: Plan, reflection: str = ""):
-        """Mark a plan as completed."""
+        """Mark a plan as completed and record outcome learning."""
         plan.status = PlanStatus.COMPLETED
         plan.reflection = reflection
         plan.updated = datetime.now(timezone.utc).isoformat()
         self.store.save(plan)
-        logger.info(f"Plan {plan.id} completed: {plan.goal[:60]}")
+        logger.info("Plan %s completed: %s", plan.id, plan.goal[:60])
+        try:
+            if self.ctx and hasattr(self.ctx, "reflector"):
+                self.ctx.reflector.reflect(
+                    task=plan.goal,
+                    outcome="success",
+                    confidence_before=0.5,
+                )
+        except Exception as e:
+            logger.debug("Plan completion reflection skipped: %s", e)
 
     def get_status(self) -> dict:
         active = self.store.get_active()
@@ -263,3 +285,41 @@ class Planner:
             "active_plans": len(active),
             "total_plans": len(self.store.list_all()),
         }
+
+    def _apply_lessons(self, step: PlanStep) -> list[str]:
+        if not self.ctx or not hasattr(self.ctx, "learner"):
+            return []
+        try:
+            lessons = self.ctx.learner.get_relevant_lessons(step.description, limit=3)
+            return lessons
+        except Exception:
+            return []
+
+    def _record_success(self, plan: Plan, step: PlanStep):
+        try:
+            if self.ctx and hasattr(self.ctx, "learner"):
+                self.ctx.learner.learn_pattern(
+                    pattern=f"Successful execution pattern: {step.description}",
+                    context=plan.goal,
+                )
+        except Exception as e:
+            logger.debug("Success recording skipped: %s", e)
+
+    def _record_failure(self, plan: Plan, step: PlanStep):
+        try:
+            if self.ctx and hasattr(self.ctx, "learner"):
+                self.ctx.learner.learn_mistake(
+                    mistake=step.actual_outcome,
+                    correct_approach="Validate inputs and retry with smaller scope.",
+                    context=f"{plan.goal} | {step.description}",
+                )
+        except Exception as e:
+            logger.debug("Failure recording skipped: %s", e)
+
+    def _suggest_recovery_lessons(self, step: PlanStep) -> list[str]:
+        if not self.ctx or not hasattr(self.ctx, "learner"):
+            return []
+        try:
+            return self.ctx.learner.get_relevant_lessons(step.description, limit=3)
+        except Exception:
+            return []

@@ -5,13 +5,19 @@ Uses pyautogui for input control and subprocess for terminal.
 All computer control tools are consequential and require confirmation.
 """
 
+from __future__ import annotations
+
 import logging
 import os
+import platform
+import shutil
 import subprocess
 import tempfile
-from typing import Callable
+from typing import Callable, Optional
 
 logger = logging.getLogger("vyren.computer")
+
+from platform_abstraction import get_default_shell, is_windows
 
 
 def get_clipboard() -> str:
@@ -21,23 +27,27 @@ def get_clipboard() -> str:
         return pyperclip.paste() or ""
     except ImportError:
         try:
-            # Windows fallback
-            import ctypes
-            CF_UNICODETEXT = 13
-            user32 = ctypes.windll.user32
-            kernel32 = ctypes.windll.kernel32
-            if not user32.OpenClipboard(0):
-                return ""
-            try:
-                handle = user32.GetClipboardData(CF_UNICODETEXT)
-                if not handle:
+            from environment import get_capabilities
+            caps = get_capabilities()
+            if caps.has_clipboard and caps.is_windows:
+                import ctypes
+                CF_UNICODETEXT = 13
+                user32 = ctypes.windll.user32
+                kernel32 = ctypes.windll.kernel32
+                if not user32.OpenClipboard(0):
                     return ""
-                kernel32.GlobalLock.restype = ctypes.c_wchar_p
-                return kernel32.GlobalLock(handle) or ""
-            finally:
-                user32.CloseClipboard()
+                try:
+                    handle = user32.GetClipboardData(CF_UNICODETEXT)
+                    if not handle:
+                        return ""
+                    kernel32.GlobalLock.restype = ctypes.c_wchar_p
+                    return kernel32.GlobalLock(handle) or ""
+                finally:
+                    user32.CloseClipboard()
+            return f"Clipboard access unavailable on this environment: {caps.platform}"
         except Exception as e:
             return f"Clipboard access failed: {e}"
+        return f"Clipboard access failed: unsupported platform: {get_env().platform}"
 
 
 def set_clipboard(text: str) -> str:
@@ -51,11 +61,14 @@ def set_clipboard(text: str) -> str:
 
 
 def run_command(command: str, timeout: int = 30, shell: bool = True) -> str:
-    """Run a shell command and return output. Windows: uses cmd.exe."""
+    """Run a shell command and return output in a platform-safe way."""
     try:
         result = subprocess.run(
-            command, capture_output=True, text=True,
-            timeout=timeout, shell=shell,
+            command,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            shell=shell,
         )
         output = result.stdout
         if result.stderr:
@@ -75,7 +88,9 @@ def list_running_apps() -> str:
         for proc in psutil.process_iter(["pid", "name", "memory_percent"]):
             try:
                 info = proc.info
-                lines.append(f"  PID {info['pid']:>6}  {info['name'][:30]:30}  MEM {info.get('memory_percent', 0) or 0:5.1f}%")
+                lines.append(
+                    f"  PID {info['pid']:>6}  {info['name'][:30]:30}  MEM {info.get('memory_percent', 0) or 0:5.1f}%"
+                )
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
         lines.sort()
@@ -85,28 +100,31 @@ def list_running_apps() -> str:
 
 
 def open_application(app_name: str) -> str:
-    """Open an application by name. Windows-specific."""
+    """Open an application by name across platforms."""
     import shutil
     app_lower = app_name.lower()
 
-    # Common application mappings
     app_commands = {
         "vscode": "code",
         "code": "code",
         "notepad": "notepad",
-        "calculator": "calc",
-        "explorer": "explorer",
-        "browser": "start msedge",
-        "chrome": "start chrome",
-        "firefox": "start firefox",
-        "terminal": "start cmd",
-        "cmd": "start cmd",
-        "powershell": "start powershell",
-        "file explorer": "explorer",
+        "calculator": "calc" if is_windows() else "gnome-calculator",
+        "explorer": "explorer" if is_windows() else "xdg-open .",
+        "browser": "start msedge" if is_windows() else "xdg-open https://",
+        "chrome": "start chrome" if is_windows() else "google-chrome",
+        "firefox": "start firefox" if is_windows() else "firefox",
+        "terminal": "start cmd" if is_windows() else "x-terminal-emulator",
+        "cmd": "start cmd" if is_windows() else "x-terminal-emulator",
+        "powershell": "start powershell" if is_windows() else "x-terminal-emulator",
+        "file explorer": "explorer" if is_windows() else "xdg-open .",
     }
 
-    cmd = app_commands.get(app_lower, f"start {app_name}")
+    cmd = app_commands.get(app_lower, app_name)
     try:
+        from environment import get_capabilities
+        caps = get_capabilities()
+        if not caps.can_open_apps:
+            return f"Opening apps is not supported on this environment: {caps.platform}"
         result = subprocess.run(cmd, capture_output=True, text=True, shell=True, timeout=10)
         return f"Opened: {app_name}"
     except Exception as e:

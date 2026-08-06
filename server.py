@@ -44,6 +44,8 @@ from tools import create_registry
 # Initialize
 # ---------------------------------------------------------------------------
 
+from platform_paths import get_disk_root, get_notices_path
+
 config.load()
 memory = MemoryStore(config.get("memory.path"))
 audit = AuditLog(config.get("audit.path"))
@@ -52,11 +54,7 @@ gemini_tools = registry.to_gemini_tools()
 system_prompt = build_system_prompt(memory.build_context())
 
 # Heartbeat
-notices = NoticeStore(
-    config.get("audit.path", "~/.vyren/notices.json").replace(
-        "audit.log", "notices.json"
-    )
-)
+notices = NoticeStore(get_notices_path())
 heartbeat = Heartbeat(
     notice_store=notices,
     config=config.get("heartbeat", {
@@ -115,8 +113,7 @@ async def service_worker():
 async def system_stats():
     """Real-time system information. Works on Windows, Linux, macOS."""
     mem = psutil.virtual_memory()
-    # Use drive C: root on Windows, / on Unix
-    disk_root = "C:\\" if platform.system() == "Windows" else "/"
+    disk_root = get_disk_root()
     try:
         disk = psutil.disk_usage(disk_root)
         disk_data = {
@@ -440,45 +437,8 @@ async def chat(websocket: WebSocket):
 
 def _execute_post_confirmation(name: str, args: dict, sentinel: str) -> str:
     """Execute actions that were approved through the confirmation gate."""
-    try:
-        if name == "shutdown_system":
-            import subprocess
-            subprocess.run(["shutdown", "/s", "/t", "5"], check=False)
-            return "Shutdown initiated."
-        elif name == "restart_system":
-            import subprocess
-            subprocess.run(["shutdown", "/r", "/t", "5"], check=False)
-            return "Restart initiated."
-        elif name == "delete_file":
-            path = args.get("file_path", "")
-            os.remove(path)
-            return f"Deleted: {path}"
-        elif name == "edit_file":
-            path = args.get("file_path", "")
-            content = args.get("content", "")
-            resolved = os.path.realpath(path)
-            os.makedirs(os.path.dirname(resolved), exist_ok=True)
-            with open(resolved, "w", encoding="utf-8") as f:
-                f.write(content)
-            lines = content.count("\n") + 1
-            return f"File written: {resolved} ({lines} lines)"
-        elif name == "run_python":
-            import subprocess
-            code = args.get("code", "")
-            timeout = args.get("timeout", 30)
-            python_exe = sys.executable or "python"
-            result = subprocess.run(
-                [python_exe, "-c", code],
-                capture_output=True, text=True, timeout=timeout
-            )
-            output = result.stdout
-            if result.stderr:
-                output += "\n" + result.stderr
-            return output if output.strip() else "(no output)"
-        else:
-            return sentinel
-    except Exception as e:
-        return f"Error executing {name}: {type(e).__name__} — {e}"
+    from post_confirmation import execute_post_confirmation
+    return execute_post_confirmation(name, args, sentinel)
 
 
 # ---------------------------------------------------------------------------

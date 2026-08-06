@@ -23,8 +23,9 @@ from typing import Any, Callable
 
 logger = logging.getLogger("vyren.service")
 
-# Default VYREN data directory
-VYREN_DIR = Path(os.path.expanduser("~/.vyren"))
+from platform_paths import get_vyren_dir
+
+VYREN_DIR = get_vyren_dir()
 PID_FILE = VYREN_DIR / "vyren.pid"
 STATE_FILE = VYREN_DIR / "state.json"
 

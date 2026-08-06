@@ -1,4 +1,5 @@
-"""tools/vision_tools.py -- Image and video generation tools.
+"""
+tools/vision_tools.py -- Image and video generation tools.
 
 Uses Gemini's multimodal capabilities to generate images and analyze
 visual content. Image generation requires a model that supports it.
@@ -11,6 +12,11 @@ import tempfile
 from datetime import datetime
 
 from tools import ToolDef, ToolRegistry
+
+
+def _get_generated_dir() -> str:
+    from hermes_constants import get_hermes_home
+    return str(get_hermes_home() / "generated")
 
 
 def register(registry: ToolRegistry):
@@ -47,9 +53,9 @@ def register(registry: ToolRegistry):
                     # Determine save path
                     if not save_path:
                         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        save_path = os.path.expanduser(f"~/.vyren/generated_{timestamp}.png")
+                        save_path = str(get_generated_dir() / f"generated_{timestamp}.png")
 
-                    save_path = os.path.expanduser(save_path)
+                    save_path = str(get_generated_dir() / save_path)
                     os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
 
                     ext = ".png" if "png" in mime else ".jpg"
@@ -69,7 +75,6 @@ def register(registry: ToolRegistry):
             if text:
                 return f"Model responded with text instead of an image: {text}"
             return "Image generation returned no content. The model may not support image generation."
-
         except Exception as e:
             return (
                 f"Image generation failed: {type(e).__name__} — {e}\n"
@@ -123,16 +128,31 @@ def register(registry: ToolRegistry):
             )
 
             return response.text
-
         except Exception as e:
             return f"Image analysis failed: {type(e).__name__} — {e}"
+
+    def ocr_image(file_path: str, backend: str = "auto") -> str:
+        """Run OCR on an image, PDF page, screenshot, or camera frame path."""
+        try:
+            from vision.ocr import resolve_backend
+            source = file_path
+            ocr_backend = resolve_backend(backend)
+            result = ocr_backend.detect_text(source)
+            parts = [result.text or ""]
+            if result.error:
+                parts.append(f"[ocr_error backend={result.backend} error={result.error}]")
+            if not result.words:
+                parts.append("[ocr_no_words]")
+            return "\n".join(part for part in parts if part)
+        except Exception as e:
+            return f"OCR failed: {type(e).__name__} — {e}"
 
     registry.register(ToolDef(
         name="generate_image",
         description=(
             "Generate an image from a text description. "
             "The image is saved to a file. Specify a save_path or it "
-            "auto-saves to ~/.vyren/ with a timestamp."
+            "auto-saves to the platform cache dir with a timestamp."
         ),
         parameters={
             "type": "object",
@@ -174,5 +194,30 @@ def register(registry: ToolRegistry):
             "required": ["file_path"],
         },
         handler=analyze_image,
+        safety_level="safe",
+    ))
+
+    registry.register(ToolDef(
+        name="ocr_image",
+        description=(
+            "Extract text from an image, terminal screenshot, browser screenshot, "
+            "PDF page, book page, form, or handwritten note path. "
+            "Choose an OCR backend or use auto."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "file_path": {
+                    "type": "string",
+                    "description": "Path or source path for image/pdf/screenshot",
+                },
+                "backend": {
+                    "type": "string",
+                    "description": "OCR backend: auto, tesseract, easyocr, paddle",
+                },
+            },
+            "required": ["file_path"],
+        },
+        handler=ocr_image,
         safety_level="safe",
     ))

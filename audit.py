@@ -12,9 +12,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
+from platform_paths import get_audit_log_path
+
+
 class AuditLog:
-    def __init__(self, path: str | None = None):
-        self.path = Path(path or os.path.expanduser("~/.vyren/audit.log"))
+    def __init__(self, path=None):
+        self.path = get_audit_log_path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._total_cost_usd: float = 0.0
 

@@ -28,7 +28,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-VYREN_DIR = Path(os.path.expanduser("~/.vyren"))
+from platform_paths import get_vyren_dir
+
+VYREN_DIR = get_vyren_dir()
 WORLD_FILE = VYREN_DIR / "world_model.json"
 
 
@@ -239,6 +241,22 @@ class WorldModel:
         if len(self._observations) % 10 == 0:
             self._save()
 
+    def ingest_observation(self, observation: Any) -> None:
+        """Ingest a structured vision observation into the world model."""
+        try:
+            text = getattr(observation, "summary", "") or ""
+            if not text and hasattr(observation, "__dict__"):
+                text = str(observation.__dict__)
+            self._observations.append({
+                "text": text,
+                "source": getattr(observation, "source", "vision"),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
+            if len(self._observations) % 10 == 0:
+                self._save()
+        except Exception:
+            pass
+
     # --- Context Building ---
 
     def to_context_string(self) -> str:
@@ -262,6 +280,12 @@ class WorldModel:
             for d in self._devices.values():
                 status = f" ({d.status})" if d.status != "unknown" else ""
                 lines.append(f"  - {d.name} [{d.type}]{status}")
+
+        if self._observations:
+            lines.append("Observations:")
+            for obs in self._observations[-10:]:
+                text = obs.get("text", "") if isinstance(obs, dict) else str(obs)
+                lines.append(f"  - {text}")
 
         return "\n".join(lines) if lines else ""
 

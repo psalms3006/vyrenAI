@@ -19,38 +19,49 @@ from tools import ToolDef, ToolRegistry
 EXPLICIT_FACT_IMPORTANCE = 0.8
 
 
-def register(registry: ToolRegistry, memory_v2):
+def register(registry: ToolRegistry, memory_v2, memory_store=None):
     """Register all memory tools against the MemoryManager (v2)."""
     from memory_v2 import MemoryLayer
 
     def remember(key: str, value: str) -> str:
         """Save a fact to long-term memory."""
-        if memory_v2 is None:
+        if memory_v2 is None and memory_store is None:
             return "Error: Memory store not initialized."
         key = key.strip().lower().replace(" ", "_")
-        memory_v2.remember(
-            key=key,
-            value=value,
-            layer=MemoryLayer.SEMANTIC,
-            importance=EXPLICIT_FACT_IMPORTANCE,
-            source="remember_tool",
-        )
-        return f"Remembered: {key}"
+        if memory_v2 is not None:
+            memory_v2.remember(
+                key=key,
+                value=value,
+                layer=MemoryLayer.SEMANTIC,
+                importance=EXPLICIT_FACT_IMPORTANCE,
+                source="remember_tool",
+            )
+            return f"Remembered: {key}"
+        return memory_store.add(key, value)
 
     def recall(key: str) -> str:
-        """Look up a specific fact by its key."""
-        if memory_v2 is None:
+        """Look up a specific fact by its exact key."""
+        if memory_v2 is None and memory_store is None:
             return "Error: Memory store not initialized."
-        fact = memory_v2.recall(key.strip().lower().replace(" ", "_"))
-        if fact:
-            return fact
+        key = key.strip().lower().replace(" ", "_")
+        if memory_v2 is not None:
+            fact = memory_v2.recall(key)
+            if fact:
+                return fact
+            return f"No fact found with key '{key}'. Use search_memory to look for it."
+        value = memory_store.get(key)
+        if value:
+            return value
         return f"No fact found with key '{key}'. Use search_memory to look for it."
 
     def search_memory(query: str) -> str:
         """Search memory for any facts matching a query."""
-        if memory_v2 is None:
+        if memory_v2 is None and memory_store is None:
             return "Error: Memory store not initialized."
-        results = memory_v2.search(query)
+        if memory_v2 is not None:
+            results = memory_v2.search(query)
+        else:
+            results = memory_store.search(query)
         if not results:
             return f"No memories found matching '{query}'."
         lines = []
@@ -60,22 +71,24 @@ def register(registry: ToolRegistry, memory_v2):
 
     def list_memory() -> str:
         """List all stored memories."""
-        if memory_v2 is None:
+        if memory_v2 is None and memory_store is None:
             return "Error: Memory store not initialized."
-        facts = memory_v2.list_all()
+        facts = memory_v2.list_all() if memory_v2 is not None else memory_store.list_all()
         if not facts:
             return "Memory is empty. Nothing stored yet."
         lines = [f"Memory has {len(facts)} entries:"]
         for f in facts:
-            lines.append(f"- {f['key']} [{f['layer']}]: {f['value']}")
+            lines.append(f"- {f['key']} [{f.get('layer', 'legacy')}]: {f['value']}")
         return "\n".join(lines)
 
     def delete_memory(key: str) -> str:
         """Delete a specific fact from memory."""
-        if memory_v2 is None:
+        if memory_v2 is None and memory_store is None:
             return "Error: Memory store not initialized."
         key = key.strip().lower().replace(" ", "_")
-        if memory_v2.delete(key):
+        if memory_v2 is not None and memory_v2.delete(key):
+            return f"Deleted: {key}"
+        if memory_store is not None and memory_store.delete(key):
             return f"Deleted: {key}"
         return f"No fact found with key '{key}'."
 

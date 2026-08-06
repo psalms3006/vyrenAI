@@ -20,7 +20,9 @@ from typing import Any
 
 logger = logging.getLogger("vyren.security")
 
-SEC_DIR = Path(os.path.expanduser("~/.vyren/security"))
+from platform_paths import get_security_dir
+
+SEC_DIR = get_security_dir()
 
 
 class PermissionLevel:

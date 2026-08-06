@@ -4,9 +4,7 @@ Captures screenshots and uses Gemini vision to understand what's
 on the user's screen. This is how VYREN can 'see' your screen.
 """
 
-import os
-import tempfile
-from datetime import datetime
+from platform_paths import get_memory_path, get_screenshot_dir, get_generated_dir
 
 from tools import ToolDef, ToolRegistry
 
@@ -28,7 +26,7 @@ def _capture_screen(save_path: str) -> str:
             return save_path
         except ImportError:
             return ""
-    except Exception as e:
+    except Exception:
         return ""
 
 
@@ -42,7 +40,7 @@ def register(registry: ToolRegistry):
         Requires Pillow (pip install Pillow) or mss (pip install mss).
         """
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        save_path = os.path.expanduser(f"~/.vyren/screenshots/screen_{timestamp}.png")
+        save_path = str(get_screenshot_dir() / f"screen_{timestamp}.png")
 
         result = _capture_screen(save_path)
         if not result:
@@ -62,7 +60,7 @@ def register(registry: ToolRegistry):
         a detailed description of what's on screen.
         """
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        save_path = os.path.expanduser(f"~/.vyren/screenshots/screen_{timestamp}.png")
+        save_path = str(get_screenshot_dir() / f"screen_{timestamp}.png")
 
         result = _capture_screen(save_path)
         if not result:

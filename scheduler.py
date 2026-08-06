@@ -25,7 +25,9 @@ from typing import Any, Callable
 
 logger = logging.getLogger("vyren.scheduler")
 
-JOBS_FILE = Path(os.path.expanduser("~/.vyren/jobs.json"))
+from platform_paths import get_jobs_path
+
+JOBS_FILE = get_jobs_path()
 
 
 class JobStatus(str, Enum):

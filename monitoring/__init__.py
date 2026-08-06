@@ -36,13 +36,15 @@ class SystemSnapshot:
     uptime_seconds: int = 0
 
 
+from platform_abstraction import get_disk_root
+
 def get_system_snapshot() -> SystemSnapshot:
     """Take a snapshot of current system state."""
     if not HAS_PSUTIL:
         return SystemSnapshot(os=platform.system(), hostname=platform.node())
 
     mem = psutil.virtual_memory()
-    disk_root = "C:\\" if platform.system() == "Windows" else "/"
+    disk_root = get_disk_root()
     try:
         disk = psutil.disk_usage(disk_root)
         disk_data = {"percent": disk.percent, "free_gb": round(disk.free / (1024**3), 1)}

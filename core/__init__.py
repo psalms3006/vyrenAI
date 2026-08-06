@@ -118,6 +118,28 @@ class VYRENCtx:
         from brain import Brain
         self.brain = Brain(self)
 
+        # --- Interaction / Attention State ---
+        from interaction.interaction_controller import InteractionController
+        from interaction.conversation_state import ConversationStateMachine
+        from interaction.media_awareness import MediaAwareness
+        from interaction.mode_manager import ModeManager
+
+        self.interaction_sm = ConversationStateMachine()
+        self.interaction_ctrl = InteractionController(
+            self.interaction_sm,
+            cfg.get("interaction", {}),
+        )
+        self.media_awareness = MediaAwareness()
+        self.mode_manager = ModeManager(controller=self.interaction_ctrl)
+
+        mode_id = cfg.get("interaction.default_mode", "silent")
+        self.mode_manager.set_mode(mode_id)
+        self.interaction_ctrl.set_media_detector(self.media_awareness.is_user_busy)
+
+        ctx["interaction_controller"] = self.interaction_ctrl
+        ctx["mode_manager"] = self.mode_manager
+        ctx["media_awareness"] = self.media_awareness
+
         logger.info("VYREN v2 context initialized with all subsystems")
 
     def _build_registry(self) -> ToolRegistry:
@@ -133,10 +155,23 @@ class VYRENCtx:
     def _build_system_prompt(self) -> str:
         from system_prompt import build_system_prompt
         memory_context = self.memory.build_context()
-        # Also include v2 high-importance memories
         v2_context = self.memory_v2.build_context(max_tokens=300)
         if v2_context:
             memory_context += "\n" + v2_context
+
+        try:
+            lessons = self.learner.get_relevant_lessons("current task", limit=4)
+            if lessons:
+                memory_context += "\n\nLessons learned:\n" + "\n".join(f"- {lesson}" for lesson in lessons)
+        except Exception:
+            pass
+
+        try:
+            insights = self.reflector.get_recent_insights(limit=3)
+            if insights:
+                memory_context += "\n\nRecent insights:\n" + "\n".join(f"- {insight}" for insight in insights)
+        except Exception:
+            pass
         world_context = self.world_model.to_context_string()
         kg_context = self.knowledge_graph.to_context_string()
         return build_system_prompt(

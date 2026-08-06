@@ -178,43 +178,8 @@ class Brain:
 
     def _execute_post_confirmation(self, name: str, args: dict, sentinel: str) -> str:
         """Execute actions that required confirmation."""
-        import os, sys, subprocess
-        try:
-            if name == "shutdown_system":
-                subprocess.run(["shutdown", "/s", "/t", "5"], check=False, shell=True)
-                return "Shutdown initiated."
-            elif name == "restart_system":
-                subprocess.run(["shutdown", "/r", "/t", "5"], check=False, shell=True)
-                return "Restart initiated."
-            elif name == "delete_file":
-                path = args.get("file_path", "")
-                os.remove(path)
-                return f"Deleted: {path}"
-            elif name == "edit_file":
-                path = args.get("file_path", "")
-                content = args.get("content", "")
-                resolved = os.path.realpath(path)
-                os.makedirs(os.path.dirname(resolved), exist_ok=True)
-                with open(resolved, "w", encoding="utf-8") as f:
-                    f.write(content)
-                lines = content.count("\n") + 1
-                return f"File written: {resolved} ({lines} lines)"
-            elif name == "run_python":
-                code = args.get("code", "")
-                timeout = args.get("timeout", 30)
-                python_exe = sys.executable or "python"
-                result = subprocess.run(
-                    [python_exe, "-c", code],
-                    capture_output=True, text=True, timeout=timeout,
-                )
-                output = result.stdout
-                if result.stderr:
-                    output += "\n" + result.stderr
-                return output if output.strip() else "(no output)"
-            else:
-                return sentinel
-        except Exception as e:
-            return f"Error executing {name}: {type(e).__name__} -- {e}"
+        from post_confirmation import execute_post_confirmation
+        return execute_post_confirmation(name, args, sentinel)
 
     def _post_process(self, user_input: str, response: str, turn_start: float):
         """Post-process after a turn: auto-learn, update context, etc."""
@@ -223,24 +188,137 @@ class Brain:
         # Auto-remember important facts from the conversation
         self._auto_memorize(user_input, response)
 
+        # Reflect on the turn and update lessons
+        self._reflect_on_turn(user_input, response, duration)
+
         # Log the turn
         self.ctx.audit.model_turn("model", response[:200])
 
+        # Persist identity facts once
+        self._ensure_identity_memorized()
+
     def _auto_memorize(self, user_input: str, response: str):
         """Automatically extract and store important information from interactions."""
-        # This is a lightweight heuristic -- the model can also explicitly use remember() tool
-        # For now, we track interaction patterns
         try:
             from memory_v2 import MemoryLayer
+            interaction_key = f"last_interaction_{int(time.time())}"
             self.ctx.memory_v2.remember(
-                key=f"last_interaction_{int(time.time())}",
-                value=f"User: {user_input[:100]} | VYREN: {response[:100]}",
+                key=interaction_key,
+                value=f"User: {user_input[:120]} | VYREN: {response[:120]}",
                 layer=MemoryLayer.EPISODIC,
-                importance=0.2,
+                importance=0.25,
                 source="auto_memorize",
             )
+            # Compact old interaction memories to avoid unbounded growth.
+            self._compact_old_interactions()
         except Exception as e:
-            logger.debug(f"Auto-memorize skipped: {e}")
+            logger.debug("Auto-memorize skipped: %s", e)
+
+    def _compact_old_interactions(self, keep: int = 40):
+        """Keep only the most recent interaction memories to save context budget."""
+        try:
+            from memory_v2 import MemoryLayer
+            entries = self.ctx.memory_v2.stores.get(MemoryLayer.EPISODIC)
+            if entries is None:
+                return
+            all_items = entries.all()
+            if len(all_items) <= keep:
+                return
+            all_items.sort(key=lambda e: e.created, reverse=True)
+            for entry in all_items[keep:]:
+                if entry.key.startswith("last_interaction_"):
+                    entries.delete(entry.id)
+        except Exception as e:
+            logger.debug("Interaction compaction skipped: %s", e)
+
+    def _reflect_on_turn(self, user_input: str, response: str, duration: float):
+        """Reflect briefly on the turn and store lessons when useful."""
+        try:
+            outcome = "success"
+            if "error" in response.lower() or duration > 20:
+                outcome = "failure"
+            elif any(token in response.lower() for token in ["sorry", "retry", "could not"]):
+                outcome = "partial"
+
+            self.ctx.reflector.reflect(
+                task=user_input[:180],
+                outcome=outcome,
+                confidence_before=0.5,
+            )
+
+            if outcome == "failure":
+                self.ctx.learner.learn_mistake(
+                    mistake=response[:180],
+                    correct_approach="Prefer validation and concise recovery.",
+                    context=user_input[:180],
+                )
+            elif outcome == "success" and len(user_input.strip()) > 20:
+                self.ctx.learner.learn_pattern(
+                    pattern=f"Successful pattern for: {user_input[:120]}",
+                    context=user_input[:180],
+                )
+        except Exception as e:
+            logger.debug("Turn reflection skipped: %s", e)
+
+    def _ensure_identity_memorized(self):
+        """Persist core identity facts if they are not already stored."""
+        try:
+            from memory_v2 import MemoryLayer
+            from identity import get_assistant_name, get_product_name, get_company
+            assistant_name = get_assistant_name()
+            product_name = get_product_name()
+            company = get_company()
+
+            existing = self.ctx.memory_v2.recall("assistant_name")
+            if not existing:
+                self.ctx.memory_v2.remember(
+                    "assistant_name",
+                    assistant_name,
+                    layer=MemoryLayer.SEMANTIC,
+                    importance=0.9,
+                )
+            existing = self.ctx.memory_v2.recall("product_name")
+            if not existing:
+                self.ctx.memory_v2.remember(
+                    "product_name",
+                    product_name,
+                    layer=MemoryLayer.SEMANTIC,
+                    importance=0.9,
+                )
+            existing = self.ctx.memory_v2.recall("company")
+            if not existing:
+                self.ctx.memory_v2.remember(
+                    "company",
+                    company,
+                    layer=MemoryLayer.SEMANTIC,
+                    importance=0.9,
+                )
+        except Exception as e:
+            logger.debug("Identity memory persistence skipped: %s", e)
+
+    def _retrieve_context(self, user_input: str, history: list) -> dict:
+        """Retrieve relevant context from memory, lessons, KG, and world model."""
+        context = {}
+
+        memory_results = self.ctx.memory_v2.search(user_input, limit=5)
+        if memory_results:
+            context["memory"] = memory_results
+
+        try:
+            lessons = self.ctx.learner.get_relevant_lessons(user_input, limit=4)
+            if lessons:
+                context["lessons"] = lessons
+        except Exception as e:
+            logger.debug("Lesson retrieval skipped: %s", e)
+
+        kg_results = self.ctx.knowledge_graph.search(user_input)
+        if kg_results:
+            context["knowledge_graph"] = [
+                {"name": e.name, "type": e.type.value, "importance": e.importance}
+                for e in kg_results[:5]
+            ]
+
+        return context
 
     def get_status(self) -> dict:
         return {

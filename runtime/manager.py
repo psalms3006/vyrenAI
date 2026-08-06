@@ -15,6 +15,8 @@ Responsibilities:
   - Provide the unified interaction entry point
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import os
@@ -27,8 +29,9 @@ from typing import Any, Callable
 
 logger = logging.getLogger("vyren.runtime")
 
-# VYREN data directory (Windows: %USERPROFILE%\\.vyren)
-VYREN_DIR = Path(os.path.expanduser("~/.vyren"))
+from platform_abstraction import get_env
+
+VYREN_DIR: Path = get_env().data_dir
 
 
 class RuntimeManager:
@@ -42,7 +45,9 @@ class RuntimeManager:
     """
 
     def __init__(self):
-        self._services: dict[str, Any] = {}
+        from runtime.registry import RuntimeServiceRegistry
+
+        self._services = RuntimeServiceRegistry()
         self._boot_manager = None
         self._running = False
         self._supervisor_thread: threading.Thread | None = None
@@ -71,7 +76,7 @@ class RuntimeManager:
 
     def register_service(self, name: str, instance: Any):
         """Register a running service instance."""
-        self._services[name] = instance
+        self._services.register(name, instance)
 
     def start(self):
         """Boot the system and enter the always-on main loop."""
@@ -208,33 +213,38 @@ class RuntimeManager:
                      dependencies=["agents", "memory", "event_bus",
                                     "tools"])
 
-        # -- Phase 14: Connectivity --
+        # -- Phase 14: Camera --
+        bm.register("camera", Phase.CAMERA, self._init_camera,
+                     dependencies=["config"],
+                     shutdown_fn=self._shutdown_camera)
+
+        # -- Phase 15: Connectivity --
         bm.register("connectivity", Phase.CONNECTIVITY,
                      self._init_connectivity,
                      dependencies=["event_bus", "reliability"],
                      shutdown_fn=self._shutdown_connectivity,
                      restart_on_failure=True)
 
-        # -- Phase 15: Voice --
+        # -- Phase 16: Voice --
         bm.register("voice", Phase.VOICE, self._init_voice,
                      dependencies=["connectivity", "memory",
                                     "event_bus", "tools"],
                      shutdown_fn=self._shutdown_voice,
                      restart_on_failure=True)
 
-        # -- Phase 16: Server --
+        # -- Phase 17: Server --
         bm.register("server", Phase.SERVER, self._init_server,
                      dependencies=["memory", "tools", "event_bus",
                                     "heartbeat", "audit"],
                      shutdown_fn=self._shutdown_server,
                      restart_on_failure=True)
 
-        # -- Phase 17: Service (PID file, state) --
+        # -- Phase 18: Service (PID file, state) --
         bm.register("service", Phase.SERVICE, self._init_service,
                      dependencies=["config"],
                      shutdown_fn=self._shutdown_service)
 
-        # -- Phase 18: Monitoring --
+        # -- Phase 19: Monitoring --
         bm.register("monitoring", Phase.MONITORING, self._init_monitoring,
                      dependencies=["reliability", "tools", "event_bus"],
                      shutdown_fn=self._shutdown_monitoring)
@@ -324,6 +334,26 @@ class RuntimeManager:
         wm = WorldModel()
         ctx["world_model"] = wm
         return wm
+
+    def _init_camera(self, ctx: dict):
+        """Phase 14: Initialize camera engine."""
+        try:
+            from camera import CameraManager
+
+            manager = CameraManager()
+            ctx["camera"] = manager
+            return manager
+        except Exception as exc:
+            logger.warning("Camera init failed: %s", exc)
+            ctx["camera"] = None
+            return None
+
+    def _shutdown_camera(self, instance, ctx: dict):
+        try:
+            if instance is not None:
+                instance.stop()
+        except Exception:
+            pass
 
     def _init_scheduler(self, ctx: dict):
         """Phase 8: Initialize job scheduler."""
@@ -473,7 +503,7 @@ class RuntimeManager:
         return {"planner": planner, "reasoning": reasoning}
 
     def _init_connectivity(self, ctx: dict):
-        """Phase 14: Initialize connectivity manager."""
+        """Phase 15: Initialize connectivity manager."""
         from runtime.connectivity import ConnectivityManager
 
         cm = ConnectivityManager(ctx)
@@ -485,7 +515,7 @@ class RuntimeManager:
         instance.stop_monitoring()
 
     def _init_voice(self, ctx: dict):
-        """Phase 15: Initialize voice runtime."""
+        """Phase 16: Initialize voice runtime."""
         from voice.runtime import VoiceRuntime
 
         vr = VoiceRuntime(ctx)
@@ -500,12 +530,15 @@ class RuntimeManager:
         # no arbitrary sleep.
         vr.on_state_change(self._on_voice_state_for_greeting)
 
-        vr.start()
+        try:
+            vr.start()
+        except Exception as exc:
+            logger.warning("Voice unavailable at boot: %s", exc)
+            vr._fallback_mode = True
+            vr._notify_state("fallback")
+
         ctx["voice_runtime"] = vr
 
-        # Safety net: if voice never reaches "listening" or "fallback"
-        # (e.g. sounddevice missing, no mic, engine stuck retrying), still
-        # fire the greeting eventually so VYREN isn't silently mute forever.
         threading.Thread(
             target=self._greeting_watchdog, name="vyren-greeting-watchdog", daemon=True,
         ).start()
@@ -519,7 +552,7 @@ class RuntimeManager:
             pass
 
     def _init_server(self, ctx: dict):
-        """Phase 16: Initialize the web server (FastAPI + WebSocket)."""
+        """Phase 17: Initialize the web server (FastAPI + WebSocket)."""
         from runtime.web_server import WebServer
 
         ws = WebServer(ctx)
@@ -531,7 +564,7 @@ class RuntimeManager:
         instance.stop()
 
     def _init_service(self, ctx: dict):
-        """Phase 17: Initialize service state (PID, crash recovery)."""
+        """Phase 18: Initialize service state (PID, crash recovery)."""
         from service import ServiceState
 
         state = ServiceState(VYREN_DIR / "state.json")
@@ -551,7 +584,7 @@ class RuntimeManager:
             pid_file.unlink()
 
     def _init_monitoring(self, ctx: dict):
-        """Phase 18: Initialize health monitoring, background tasks, auto-save."""
+        """Phase 19: Initialize health monitoring, background tasks, auto-save."""
         from event_bus import Event, VYREN_STARTED
 
         # Register health checks
@@ -663,25 +696,36 @@ class RuntimeManager:
         """The always-on main loop. Blocks until shutdown."""
         logger.info("VYREN is now running. Press Ctrl+C to shut down.")
 
-        # Print status immediately — this doesn't wait on voice or network.
+        try:
+            import config as cfg
+            interaction_cfg = cfg.get("interaction", {})
+        except Exception:
+            interaction_cfg = {}
+
+        from interaction.conversation_state import (
+            BACKGROUND,
+            ConversationStateMachine,
+            PASSIVE_LISTENING,
+        )
+        from interaction.interaction_controller import InteractionController
+        sm = ConversationStateMachine()
+        ctrl = InteractionController(sm, interaction_cfg)
+        boot_state = ctrl.state_machine.state
+        if boot_state == sm.state:
+            boot_state = sm.transition(BACKGROUND)
+        self._services["interaction_controller"] = ctrl
+
         self._print_status_banner()
 
-        # Unblock the greeting pipeline: it also waits on the voice engine
-        # actually connecting (see _on_voice_state_for_greeting), whichever
-        # comes last. Boot is fully done at this point, so self._services
-        # is safe to read from any thread from here on.
         self._boot_ready.set()
 
-        # Start terminal interaction loop (text is SECONDARY to voice)
         from runtime.terminal import start_terminal_loop
-        start_terminal_loop(self._services, self._shutdown_event)
+        start_terminal_loop(self._services, self._shutdown_event, interaction_controller=self._services.get("interaction_controller"))
 
         while self._running and not self._shutdown_event.is_set():
             try:
-                # Check for pending proactive notices
                 self._check_proactive_assistance()
 
-                # Idle sleep -- low CPU usage
                 self._shutdown_event.wait(timeout=2.0)
 
             except KeyboardInterrupt:
@@ -780,13 +824,19 @@ class RuntimeManager:
         voice_mode = voice_rt.mode if voice_rt and voice_rt.is_active else "off"
 
         print()
-        print(f"  VYREN is online.")
-        print(f"  Voice: {voice_mode} — connecting..." if voice_mode == "gemini_live"
-              else f"  Voice: {voice_mode} — Say 'Hey Vyren' to talk")
+        try:
+            from identity import get_assistant_name, get_wake_word
+            assistant_name = get_assistant_name()
+            wake_word = get_wake_word()
+        except Exception:
+            assistant_name = "VYREN"
+            wake_word = "vyren"
+        print(f"  {assistant_name} is online.")
+        print(f"  Voice: {voice_mode}")
         print(f"  Tools: {tool_count} loaded")
         print(f"  Ollama: {'available' if ollama else 'not running'}")
         print(f"  Dashboard: http://localhost:{self._services.get('server_port', 8420)}")
-        print(f"  (Text input available — type below. Voice is primary.)")
+        print(f"  Text input available.")
         print()
 
     def _on_voice_state_for_greeting(self, state: str):
@@ -803,6 +853,12 @@ class RuntimeManager:
         """
         if state not in ("listening", "fallback"):
             return
+        try:
+            ctrl = self._services.get("interaction_controller")
+            if ctrl is not None:
+                ctrl.set_user_mode("conversation")
+        except Exception:
+            pass
         self._fire_greeting_once()
 
     def _greeting_watchdog(self):
@@ -825,15 +881,19 @@ class RuntimeManager:
         ).start()
 
     def _run_startup_greeting(self):
-        """Build and speak the startup greeting. Runs off the main thread
-        so a slow network call can never delay boot or block the voice
-        engine's own event loop.
+        """Build and speak the startup greeting.
+
+        Runs off the main thread so a slow network call can never delay
+        boot or block the voice engine's own event loop.
         """
-        # Wait for the rest of boot (server/service/monitoring phases) to
-        # finish too, so self._services is fully populated before any
-        # provider reads from it. Bounded so a stuck non-voice phase can't
-        # hold the greeting hostage forever.
         self._boot_ready.wait(timeout=15.0)
+
+        try:
+            import config as cfg
+            if not cfg.get("interaction.startup_speak_greeting", False):
+                return
+        except Exception:
+            return
 
         try:
             from brain.greeting_engine import GreetingManager
@@ -841,13 +901,20 @@ class RuntimeManager:
             greeting = asyncio.run(gm.generate_async(timeout=4.0))
         except Exception as e:
             logger.debug(f"Greeting generation failed, using fallback: {e}")
-            greeting = "VYREN is online and listening."
+            greeting = "VYREN is online."
 
         print(f"  {greeting}\n")
 
         voice_rt = self._services.get("voice_runtime")
-        if voice_rt and voice_rt.is_active:
-            voice_rt.speak(greeting)
+        if voice_rt is not None:
+            if voice_rt.is_active:
+                voice_rt.speak(greeting)
+            elif getattr(voice_rt, "mode", None) == "fallback":
+                try:
+                    voice_rt._speak_fallback(greeting)
+                except Exception as exc:
+                    logger.debug("Fallback greeting speak failed: %s", exc)
+                    print(f"  [Fallback TTS unavailable: {exc}]")
 
     # ------------------------------------------------------------------
     # Signal Handling

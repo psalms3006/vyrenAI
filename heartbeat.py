@@ -28,11 +28,14 @@ from typing import Callable
 import psutil
 
 
+from platform_paths import get_notices_path
+
+
 class NoticeStore:
     """Persistent store for proactive notices. Human-readable JSON."""
 
     def __init__(self, path: str | None = None):
-        self.path = Path(path or os.path.expanduser("~/.vyren/notices.json"))
+        self.path = get_notices_path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._notices: list[dict] = []
         self._load()

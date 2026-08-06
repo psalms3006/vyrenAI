@@ -18,11 +18,12 @@ Startup phases (in order):
  11. tools         -- Tool registry
  12. agents        -- Agent registry + coordinator
  13. brain         -- Planner, reasoning engine
- 14. connectivity  -- Online/offline manager
- 15. voice         -- Voice runtime (wake-word, continuous, Gemini Live)
- 16. server        -- FastAPI + WebSocket dashboard
- 17. service       -- PID file, crash recovery, state persistence
- 18. monitoring    -- Health verification, auto-restart
+ 14. camera        -- Camera engine enumeration/health
+ 15. connectivity  -- Online/offline manager
+ 16. voice         -- Voice runtime (wake-word, continuous, Gemini Live)
+ 17. server        -- FastAPI + WebSocket dashboard
+ 18. service       -- PID file, crash recovery, state persistence
+ 19. monitoring    -- Health verification, auto-restart
 
 No manual startup of any component should ever be required.
 """
@@ -56,11 +57,12 @@ class Phase(IntEnum):
     TOOLS = 11
     AGENTS = 12
     BRAIN = 13
-    CONNECTIVITY = 14
-    VOICE = 15
-    SERVER = 16
-    SERVICE = 17
-    MONITORING = 18
+    CAMERA = 14
+    CONNECTIVITY = 15
+    VOICE = 16
+    SERVER = 17
+    SERVICE = 18
+    MONITORING = 19
 
 
 @dataclass

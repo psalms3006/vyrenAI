@@ -56,6 +56,28 @@ def init_session():
         _counters["session_start_time"] = now
 
 
+def mark_mic_alive():
+    """Reset just the mic-dead heartbeat to NOW.
+
+    Call this the instant the mic stream actually starts capturing
+    (after stream.start() succeeds) — NOT at init_session() time, which
+    runs before the Gemini Live connect() handshake even begins.
+    init_session()'s reset is too early: if connect() + device-open
+    together take close to (or more than) mic_heartbeat_timeout — which
+    they can, connect() alone took 8s in one observed run — the
+    supervisor's very first check sees a stale clock and fires a false
+    MIC DEAD before the mic has had any chance to produce a frame.
+    Also needed on every worker-level mic restart (not just full
+    session reconnects), since nothing else resets this between
+    restarts — without this, a single false trigger cascades into a
+    restart storm because the stale timestamp is still stale on the
+    very next supervisor check, seconds later.
+    """
+    global _counters
+    with _counters_lock:
+        _counters["last_mic_frame_time"] = time.monotonic()
+
+
 def get_counters() -> dict:
     with _counters_lock:
         return dict(_counters)

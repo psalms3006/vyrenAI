@@ -22,6 +22,8 @@ from typing import Any, Callable
 
 import httpx
 
+from platform_paths import get_offline_queue_path
+
 logger = logging.getLogger("vyren.connectivity")
 
 
@@ -127,16 +129,7 @@ class ConnectivityManager:
 
     def queue_for_later(self, task_description: str) -> str:
         """Queue an online-only task for when connectivity returns."""
-        queue_path = self._ctx.get("vyren_dir")
-        if queue_path is None:
-            from pathlib import Path
-            import os
-            queue_path = Path(os.path.expanduser("~/.vyren"))
-        else:
-            from pathlib import Path
-            queue_path = Path(queue_path)
-
-        queue_file = queue_path / "offline_task_queue.json"
+        queue_file = get_offline_queue_path()
 
         # Load existing queue
         import json
@@ -166,7 +159,7 @@ class ConnectivityManager:
         from pathlib import Path
         import json, os
 
-        queue_file = Path(os.path.expanduser("~/.vyren")) / "offline_task_queue.json"
+        queue_file = get_offline_queue_path()
         if not queue_file.exists():
             return []
         try:
@@ -331,11 +324,9 @@ class ConnectivityManager:
             audit.info(f"Processing {len(tasks)} queued offline tasks")
 
         # Clear the queue file
-        from pathlib import Path
-        import json, os
-        queue_file = Path(os.path.expanduser("~/.vyren")) / "offline_task_queue.json"
+        queue_file = get_offline_queue_path()
         try:
-            queue_file.unlink()
+            queue_file.unlink(missing_ok=True)
         except Exception:
             pass
 

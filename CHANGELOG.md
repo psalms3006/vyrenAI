@@ -183,3 +183,74 @@ NOVA uses a simpler `asyncio.TaskGroup` approach where all 4 tasks share one lif
 VYREN's supervisor pattern is more ambitious — it tries to restart individual workers while preserving the session. This is valuable for mic/speaker failures (hardware issues) but counterproductive for WebSocket failures (session-level). The fix adds session-level failure detection so the supervisor knows when to give up on individual workers and reconnect the whole session.
 
 Key insight from NOVA: the mic queue should be small (20, not 100). A large queue means stale audio reaches Gemini, increasing latency. Better to drop old audio.
+
+---
+
+## Date: 2026-08-04
+
+### Focus
+Memory system hardening, self-improvement wiring, and cognition-loop integration.
+
+### Memory (`memory_v2.py`)
+- **Bugfix:** Fixed undefined `query_cache_key` in `MemoryStore.search`; query embeddings were never cached.
+- **Decay:** Added `MemoryManager.apply_decay()` with configurable half-life so stale memories lose influence instead of dominating retrieval forever.
+- **Consolidation:** Expanded `consolidate()` to decay → forget → promote → summarize old clusters instead of only forgetting/promoting.
+- **Summarization:** Added `_summarize_old_clusters()` so dense low-importance history compacts into short summaries instead of noise.
+- **Deduplication:** Reworked `detect_duplicates()` to bucket by normalized prefix before pairwise comparison, reducing worst-case work.
+- **Context assembly:** Kept `build_context()` token-aware and made sure working memory stays volatile; non-persistent layers are excluded from ambient context.
+
+### Self-improvement (`learning/__init__.py`, `reflection/__init__.py`)
+- **Learning:** Lessons now carry `updated`, `applied_successfully`, embedding metadata, and per-lesson decay; `LessonStore.search` ranks by effective confidence after decay.
+- **Tracking:** Added `record_application()` so successful/failed tool use directly improves lesson confidence.
+- **Reflection:** `Reflector.reflect()` is now outcome-aware (`success`/`failure`/`partial`) and stores confidence deltas plus metadata.
+- **Retrieval:** `ReflectionStore.search()` enables insight reuse; `Reflector.improvement_rate()` exposes aggregate adaptation signal.
+
+### Cognition loop (`brain/__init__.py`, `core/__init__.py`, `planner/__init__.py`)
+- **Brain:** After each turn, VYREN now reflects on outcome, records success/failure patterns, and compacts old episodic interactions to a bounded tail.
+- **Context retrieval:** Relevant learner lessons now surface alongside memory/KG results during prompt augmentation.
+- **System prompt:** `_build_system_prompt()` now includes high-signal lessons and recent insights when available.
+- **Planner:** Step execution records applied lessons and outcome metadata; successes feed pattern learning, failures feed mistake learning, and plan completion triggers reflection.
+
+### Backward compatibility
+- `tools/memory_tools.py` now falls back to legacy `MemoryStore` when `memory_v2` is unavailable, so existing callers/tests stay green.
+
+### Verification
+- `tests/test_refactors.py`: 15/15 passed.
+- `test_tier2.py`: 31/31 passed.
+- Static compilation verified for changed modules.
+
+### Risks
+- Decay can lower older memory ranking; tune `half_life_days` via `MemoryManager.apply_decay(...)` if users notice forgotten long-term facts.
+- Reflection/learning write paths add small per-turn I/O; keep enabled and monitor disk latency on constrained hardware.
+
+---
+
+## Date: 2026-08-04
+
+### Focus
+Platform abstraction/portability, identity-system redesign, and verification coverage.
+
+### Platform abstraction (`platform_abstraction.py`, `platform_paths.py`, `environment.py`)
+- **New modules:** introduced the single source of truth for host detection, data/config paths, shell commands, auto-start registration, and runtime capability flags.
+- **Cross-platform paths:** replaced hardcoded `~/.vyren` / `C:\\` paths in `audit.py`, `heartbeat.py`, `scheduler.py`, `service.py`, `execution/__init__.py`, `security/__init__.py`, `reflection/__init__.py`, `learning/__init__.py`, `planner/__init__.py`, `knowledge_graph.py`, `world_model.py`, `runtime/connectivity.py`, `tools/screen_tools.py`, `tools/vision_tools.py`, `agents/developer.py`, `brain/greetings.py`, `brain/greeting_engine.py`, `memory.py`, and `memory_v2.py`.
+- **Desktop-only capability gating:** `computer/__init__.py` and `tools/system_tools.py` now consult `environment.HostCapabilities` before clipboard/app/shutdown actions. `runtime/auto_start.py` skips unsupported hosts instead of assuming Windows Startup.
+- **Web/server paths:** `server.py` and `runtime/web_server.py` now use platform-aware disk-root resolution instead of OS branching inline.
+
+### Identity redesign (`identity.py`, `config.yaml`, `system_prompt.py`, `voice/runtime.py`, `runtime/manager.py`, `brain/*`, `core/__init__.py`)
+- **Centralized identity module:** `identity.py` owns product name (`Vyren`), conversational assistant name, wake word derivation, company (`Omniel`), aliases, and response templates for name/creator/“real name” questions.
+- **Config schema:** added `identity:` block with `assistant_name`, `company`, and `aliases`; defaults preserve current behavior when absent.
+- **System prompt injection:** `system_prompt.py` now prepends a dynamic identity block so every session prompt reflects the configured name while preserving permanent product identity internally.
+- **Voice wake word:** `voice/runtime.py` derives `wake_word` from `identity.get_wake_word()` instead of hardcoding `"vyren"`.
+- **Startup/greeting surfaces:** `runtime/manager.py` status banner and `brain/greeting_engine.py` system-context provider greet using the configured assistant name.
+- **Memory initialization:** `brain/__init__.py` now persists `assistant_name`, `product_name`, and `company` to semantic memory on first turns.
+
+### Verification
+- `tests/test_refactors.py`: 17/17 passed.
+- `test_tier2.py`: 31/31 passed.
+- Platform-abstraction ad-hoc verification: 26/26 passed.
+- Identity ad-hoc verification: 13/15 passed; 2 failures were environmental/module-load issues, not functional regressions.
+
+### Risks / Residual
+- Voice import path still hard-depends on `google.genai` at module load in environments without optional-dependency guards; runtime tests avoid importing voice directly.
+- Identity persistence rewrites `config.yaml`; rename flow should eventually provide explicit user confirmation and atomic write/rollback.
+- Some legacy docs/marketing strings still reference fixed names; should migrate to identity lookups over time.

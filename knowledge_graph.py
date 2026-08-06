@@ -23,7 +23,9 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
-VYREN_DIR = Path(os.path.expanduser("~/.vyren"))
+from platform_paths import get_vyren_dir
+
+VYREN_DIR = get_vyren_dir()
 KG_FILE = VYREN_DIR / "knowledge_graph.json"
 
 

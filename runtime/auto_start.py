@@ -1,8 +1,10 @@
 """
-runtime/auto_start.py -- Windows Auto-Start Registration.
+runtime/auto_start.py -- Platform-aware auto-start registration.
 
-Registers VYREN to start automatically when Windows boots.
-Uses the Windows Startup folder (configurable).
+Registers VYREN to start automatically on supported platforms:
+  - Windows: Startup folder shortcut or fallback batch file
+  - Linux/macOS: shell script under platform config/data directories
+  - Android: not supported by this mechanism
 
 Usage (from Python):
     from runtime.auto_start import AutoStartManager
@@ -12,10 +14,14 @@ Usage (from Python):
     mgr.is_enabled()  # Check if registered
 """
 
+from __future__ import annotations
+
 import logging
 import os
 import sys
 from pathlib import Path
+
+from platform_abstraction import get_env, is_windows
 
 logger = logging.getLogger("vyren.auto_start")
 
@@ -25,11 +31,11 @@ class AutoStartManager:
     Manages VYREN's auto-start registration.
 
     On Windows, creates a shortcut in the Startup folder.
-    On Linux (future), would use systemd user service.
-    On Android (future), would use a foreground service.
+    On Linux/macOS, creates a shell script in platform data/config dirs.
     """
 
     def __init__(self):
+        env = get_env()
         self._startup_folder = self._get_startup_folder()
         self._shortcut_name = "VYREN.lnk"
         self._shortcut_path = self._startup_folder / self._shortcut_name
@@ -50,6 +56,15 @@ class AutoStartManager:
             return True
 
         try:
+            from environment import get_capabilities
+            caps = get_capabilities()
+            if not caps.has_autostart:
+                logger.info("Auto-start not applicable on this environment: %s", caps.platform)
+                return False
+        except Exception:
+            pass
+
+        try:
             self._create_shortcut()
             logger.info(f"Auto-start enabled: {self._shortcut_path}")
             return True
@@ -64,6 +79,15 @@ class AutoStartManager:
             return True
 
         try:
+            from environment import get_capabilities
+            caps = get_capabilities()
+            if not caps.has_autostart:
+                logger.info("Auto-start not applicable on this environment: %s", caps.platform)
+                return False
+        except Exception:
+            pass
+
+        try:
             self._shortcut_path.unlink()
             logger.info("Auto-start disabled")
             return True
@@ -72,10 +96,14 @@ class AutoStartManager:
             return False
 
     def _get_startup_folder(self) -> Path:
-        """Get the Windows Startup folder path."""
-        if sys.platform == "win32":
-            import winreg
+        """Get the platform startup location."""
+        env = get_env()
+        if not env.supports_autostart:
+            return env.data_dir / "autostart"
+
+        if is_windows():
             try:
+                import winreg
                 key = winreg.OpenKey(
                     winreg.HKEY_CURRENT_USER,
                     r"Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders",
@@ -84,19 +112,16 @@ class AutoStartManager:
                 winreg.CloseKey(key)
                 return Path(startup)
             except Exception:
-                # Fallback
                 appdata = os.environ.get("APPDATA", "")
                 return Path(appdata) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
 
-        # Non-Windows: use a config directory
-        return Path(os.path.expanduser("~/.config/vyren/"))
+        return env.config_dir / "autostart"
 
     def _create_shortcut(self):
-        """Create a Windows shortcut (.lnk) file."""
-        if sys.platform == "win32":
+        """Create a platform-specific autostart entry."""
+        if is_windows():
             self._create_windows_shortcut()
         else:
-            # On non-Windows, create a simple shell script
             self._create_shell_script()
 
     def _create_windows_shortcut(self):
@@ -112,13 +137,11 @@ class AutoStartManager:
                 shell.IID_IShellLink,
             )
 
-            # Set shortcut properties
             shortcut.SetPath(str(self._target_script))
             shortcut.SetArguments(f'"{self._main_script}"')
             shortcut.SetWorkingDirectory(str(self._working_dir))
             shortcut.SetDescription("VYREN AI Operating System")
 
-            # Save the shortcut
             persist_file = shortcut.QueryInterface(pythoncom.IID_IPersistFile)
             persist_file.Save(str(self._shortcut_path), 0)
 
@@ -126,7 +149,7 @@ class AutoStartManager:
             # Fallback: create a .bat file instead
             bat_path = self._startup_folder / "VYREN.bat"
             bat_content = (
-                f'@echo off\n'
+                f"@echo off\n"
                 f'cd /d "{self._working_dir}"\n'
                 f'"{sys.executable}" main.py\n'
             )

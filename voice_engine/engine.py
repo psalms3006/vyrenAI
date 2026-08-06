@@ -57,10 +57,21 @@ import threading
 import time
 from typing import Any
 
-import numpy as np
+try:
+    import numpy as _np
+except Exception:  # pragma: no cover - optional dependency absent
+    _np = None  # type: ignore[assignment]
 
-from google import genai
-from google.genai import types
+try:
+    from google import genai
+    from google.genai import types
+except Exception:  # pragma: no cover - optional dependency absent
+    class _FakeGenai:
+        pass
+    class _FakeTypes:
+        pass
+    genai = _FakeGenai()  # type: ignore
+    types = _FakeTypes()  # type: ignore
 
 from voice_engine.protocol import (
     AssistantCallbacks, ToolCall, ToolResult,
@@ -75,6 +86,20 @@ logger = logging.getLogger("vyren.voice.engine")
 # happened — drop everything queued and hard-stop the hardware buffer now."
 # Distinct from `None`, which means "shut the playback thread down".
 _FLUSH = object()
+
+
+def _rms_from_int16_bytes(data: bytes) -> int:
+    if _np is not None:
+        samples = _np.frombuffer(data, dtype=_np.int16).astype(_np.float64)
+        return int(_np.sqrt(_np.mean(_np.square(samples)))) if samples.size else 0
+    samples = memoryview(data).cast("h")
+    if not samples:
+        return 0
+    total = 0
+    for sample in samples:
+        total += sample * sample
+    mean = total / len(samples)
+    return int(mean ** 0.5)
 
 
 class GeminiLiveVoiceEngine:
@@ -199,13 +224,10 @@ class GeminiLiveVoiceEngine:
 
         async def _do():
             try:
-                # send_realtime_input, not send_client_content: the latter
-                # is documented as "initial history seeding only" on the
-                # current Live models — using it mid-conversation is what
-                # the 1007 config-error risk and the model-migration break
-                # were both about. send_realtime_input is the one real-time
-                # input path for audio, video, AND text.
-                await self._session.send_realtime_input(text=text)
+                await self._session.send_client_content(
+                    turns={"parts": [{"text": text}]},
+                    turn_complete=True,
+                )
                 diag.log_transcription_user(text)
             except Exception as e:
                 diag.log_error("send_text", e)
@@ -216,6 +238,26 @@ class GeminiLiveVoiceEngine:
     def speak_text(self, text: str):
         """Send text that the model should speak aloud."""
         self.send_text(text)
+
+    def interrupt(self):
+        """Request an immediate barge-in / playback cutoff.
+
+        This flushes queued playback and transitions the engine back
+        to listening so the user can speak again. It is intentionally
+        lightweight: Gemini's own server-side VAD/interrupted signal
+        remains the source of truth for whether the user actually
+        interrupted; this method only improves perceived latency when
+        the assistant should stop talking immediately.
+        """
+        try:
+            self._flush_playback()
+        except Exception:
+            pass
+        self._is_speaking = False
+        try:
+            self.set_state(VoiceState.LISTENING)
+        except Exception:
+            pass
 
     def stop(self):
         """Request the engine to stop."""
@@ -392,6 +434,8 @@ class GeminiLiveVoiceEngine:
         # Build config (uses build_config_callback if available)
         config = self._build_session_config()
 
+        config = self._build_session_config()
+
         # Log tool info for diagnostics (helps catch 1007 errors)
         tool_count = 0
         if config.tools:
@@ -401,8 +445,6 @@ class GeminiLiveVoiceEngine:
                 elif isinstance(t, dict) and "function_declarations" in t:
                     tool_count += len(t["function_declarations"])
         logger.info("Connecting with %d tools, model=%s", tool_count, self._config.model)
-
-        # Create fresh queues for this session
         self._mic_queue = asyncio.Queue(maxsize=self._config.mic_queue_maxsize)
         self._speaker_queue = asyncio.Queue(maxsize=self._config.speaker_queue_maxsize)
 
@@ -461,18 +503,23 @@ class GeminiLiveVoiceEngine:
         }
 
     def _cancel_worker(self, name: str):
-        """Cancel a single worker task."""
+        """Cancel a single worker task and drain its exception state."""
         info = self._workers.get(name)
-        if info and not info["task"].done():
-            info["task"].cancel()
-            try:
-                info["task"].result(timeout=2.0)
-            except (asyncio.CancelledError, asyncio.TimeoutError):
-                pass
-            except Exception:
-                pass
-        if name in self._workers:
-            self._workers[name]["failed"] = True
+        if not info:
+            return
+        task = info["task"]
+        if not task.done():
+            task.cancel()
+        # Always try to retrieve the result/exception so it doesn't
+        # surface later as an unretrieved task exception.
+        try:
+            if task.done() and not task.cancelled():
+                task.result(timeout=2.0)
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            pass
+        info["failed"] = True
 
     async def _restart_worker(self, name: str):
         """Restart a single failed worker. Preserves everything else."""
@@ -670,8 +717,7 @@ class GeminiLiveVoiceEngine:
                 # quiet speaker bleed-through doesn't send a constant stream
                 # of false "user is talking" audio on non-headphone setups.
                 try:
-                    samples = np.frombuffer(data, dtype=np.int16).astype(np.float64)
-                    rms = int(np.sqrt(np.mean(np.square(samples)))) if samples.size else 0
+                    rms = _rms_from_int16_bytes(data)
                 except Exception:
                     rms = self._config.barge_in_rms_threshold  # fail open
                 if rms < self._config.barge_in_rms_threshold:
@@ -687,16 +733,19 @@ class GeminiLiveVoiceEngine:
                 if self._barge_in_streak < 3:
                     return
             else:
-                too_soon = (time.time() - self._last_speak_end) < 0.15
-                if too_soon:
-                    return
+                # Resume sending immediately after the model stops speaking.
+                # There is no post-speech drop window; returning to streaming
+                # fast is what makes conversation feel live. If the model's
+                # tail audio is still playing, Gemini's own VAD and barge-in
+                # path handle it — we do not need to blind the mic here.
+                pass
 
                 # Local end-of-speech guess, purely for perceived
                 # responsiveness — flips the UI to THINKING the instant the
                 # person stops talking rather than waiting on the server.
                 try:
-                    samples = np.frombuffer(data, dtype=np.int16).astype(np.float64)
-                    rms = int(np.sqrt(np.mean(np.square(samples)))) if samples.size else 0
+                    samples = _np.frombuffer(data, dtype=_np.int16).astype(_np.float64)
+                    rms = int(_np.sqrt(_np.mean(_np.square(samples)))) if samples.size else 0
                 except Exception:
                     rms = 0
                 if rms >= self._config.barge_in_rms_threshold:
@@ -759,6 +808,7 @@ class GeminiLiveVoiceEngine:
             )
             stream.start()
             diag.log_mic_started()
+            diag.mark_mic_alive()
 
             # Keep this task alive. Update heartbeat each iteration.
             while self._active:
@@ -956,20 +1006,12 @@ class GeminiLiveVoiceEngine:
 
                             diag.log_turn_complete(full_in, full_out)
 
-                            # NOTE: mic/state reactivation deliberately does
-                            # NOT happen here. turn_complete fires the
-                            # instant Gemini finishes GENERATING — the
-                            # speaker can still have seconds of audio
-                            # queued in _play_q. Flipping _is_speaking here
-                            # reactivates a full-volume mic while VYREN is
-                            # still audibly talking, which is what let
-                            # VYREN's own tail-end audio get picked back up
-                            # and re-sent to Gemini as a fresh "user" turn
-                            # (self-transcription) and made a single
-                            # response look like several turns. See
-                            # _await_playback_drain_then_listen().
+                            # NOTE: mic/state reactivation happens immediately
+                            # below. This helper is now a best-effort cleanup
+                            # waiter only; it no longer blocks listening state
+                            # or mic audio after a turn ends.
                             asyncio.ensure_future(
-                                self._await_playback_drain_then_listen()
+                                self._await_playback_drain_cleanup(),
                             )
 
                             # Notify assistant
@@ -1009,45 +1051,21 @@ class GeminiLiveVoiceEngine:
     # Tool execution
     # ------------------------------------------------------------------
 
-    async def _await_playback_drain_then_listen(self):
-        """Reactivate the mic/state only once the speaker has actually
-        finished playing, not when Gemini's turn_complete event fires.
-
-        Runs as its own task so it never blocks the receiver's read loop
-        (a blocked receiver loop is exactly what stops keepalive pongs
-        from going out and produces 1011 timeouts, so this must stay
-        off that path). Bounded wait so a stuck stream can't mute VYREN
-        forever; self-checks against a new turn already having started
-        so it never clobbers state that's already moved on.
+    async def _await_playback_drain_cleanup(self):
         """
-        loop = asyncio.get_event_loop()
+        Best-effort playback cleanup waiter.
+
+        Runs as its own task so it never blocks the receiver's read loop.
+        This no longer controls when listening resumes; listening state
+        and mic audio resume independently after turn_complete.
+        """
         try:
             await asyncio.wait_for(
-                loop.run_in_executor(None, self._playback_drained.wait),
-                timeout=15.0,
+                asyncio.get_event_loop().run_in_executor(None, self._playback_drained.wait),
+                timeout=5.0,
             )
         except asyncio.TimeoutError:
-            logger.warning(
-                "[AUDIO] Playback drain wait timed out after 15s — "
-                "reactivating mic anyway to avoid a permanently muted session."
-            )
-
-        # A little headroom for whatever's still in the hardware buffer
-        # after the last write() call returned (blocksize=4800 @ 24kHz,
-        # "low" latency — tens of ms, not seconds, but real).
-        await asyncio.sleep(0.12)
-
-        if self._is_speaking:
-            # A new turn's audio already started arriving while we were
-            # waiting — that path owns the state now, don't step on it.
-            return
-        if not self._active:
-            return
-
-        self._last_speak_end = time.time()
-        self.set_state(VoiceState.LISTENING)
-        diag.log_speech_ended()
-        diag.log_listening()
+            logger.debug("[AUDIO] Playback drain cleanup timed out — continuing.")
 
     async def _handle_tool_calls(self, function_calls):
         """Execute tool calls via the assistant callback with timeout."""
@@ -1205,6 +1223,17 @@ class GeminiLiveVoiceEngine:
             diag.log_error("speaker", e)
             raise
         finally:
-            _play_q.put(None)  # Signal playback thread to stop
+            # Signal playback thread to stop without blocking on a full
+            # queue. If the queue is saturated, drain stale chunks first
+            # so the sentinel is accepted immediately.
+            try:
+                while True:
+                    _play_q.get_nowait()
+            except _q.Empty:
+                pass
+            try:
+                _play_q.put_nowait(None)
+            except _q.Full:
+                pass
             self._play_q = None
             diag.log_playback_stopped()

@@ -14,7 +14,9 @@ from typing import Any, Callable
 
 logger = logging.getLogger("vyren.execution")
 
-CHECKPOINT_DIR = Path(os.path.expanduser("~/.vyren/checkpoints"))
+from platform_paths import get_checkpoints_dir
+
+CHECKPOINT_DIR = get_checkpoints_dir()
 
 
 @dataclass

@@ -35,7 +35,15 @@ import threading
 import time
 from typing import Callable, Optional
 
-import numpy as np
+try:
+    import numpy as _np
+except Exception:  # pragma: no cover - optional dependency absent
+    _np = None  # type: ignore[assignment]
+
+try:
+    import sounddevice as _sd
+except Exception:  # pragma: no cover - optional dependency absent
+    _sd = None  # type: ignore[assignment]
 
 logger = logging.getLogger("vyren.voice.offline")
 
@@ -77,6 +85,9 @@ class OfflineVoiceLoop:
     # ------------------------------------------------------------------
 
     def start(self):
+        if _sd is None:
+            logger.error("[OFFLINE] Cannot start offline voice loop: sounddevice is not installed")
+            return
         if self._thread and self._thread.is_alive():
             return
         self._stop_event.clear()
@@ -99,13 +110,15 @@ class OfflineVoiceLoop:
     # ------------------------------------------------------------------
 
     def _run(self):
-        import sounddevice as sd
+        if _sd is None:
+            logger.error("[OFFLINE] sounddevice is not installed; offline voice loop unavailable")
+            return
 
         logger.info("[OFFLINE] Voice loop starting (local STT + local/offline reasoning + local TTS)")
         self._speak("Running offline. Still listening — just without the cloud voice.")
 
         try:
-            stream = sd.InputStream(
+            stream = _sd.InputStream(
                 samplerate=SAMPLE_RATE, channels=1, dtype="int16",
                 blocksize=CHUNK_SAMPLES,
             )
@@ -130,8 +143,17 @@ class OfflineVoiceLoop:
 
                 raw = data.tobytes()
                 try:
-                    samples = np.frombuffer(raw, dtype=np.int16).astype(np.float64)
-                    rms = int(np.sqrt(np.mean(np.square(samples)))) if samples.size else 0
+                    if _np is not None:
+                        samples = _np.frombuffer(raw, dtype=_np.int16).astype(_np.float64)
+                        rms = int(_np.sqrt(_np.mean(_np.square(samples)))) if samples.size else 0
+                    else:
+                        samples = memoryview(raw).cast("h")
+                        rms = 0
+                        if samples:
+                            total = 0
+                            for sample in samples:
+                                total += sample * sample
+                            rms = int((total / len(samples)) ** 0.5)
                 except Exception:
                     rms = 0
 
@@ -197,8 +219,17 @@ class OfflineVoiceLoop:
         if model is None:
             return ""
 
-        import numpy as np
-        audio = np.frombuffer(pcm16, dtype=np.int16).astype(np.float32) / 32768.0
+        try:
+            if _np is not None:
+                audio = _np.frombuffer(pcm16, dtype=_np.int16).astype(_np.float32) / 32768.0
+            else:
+                samples = memoryview(pcm16).cast("h")
+                if not samples:
+                    return ""
+                audio = bytes(int(max(-32768, min(32767, sample))).to_bytes(2, "little", signed=True) for sample in (sample / 32768.0 for sample in samples))
+        except Exception as e:
+            logger.error(f"[OFFLINE] audio decode error: {e}")
+            return ""
 
         try:
             segments, _info = model.transcribe(audio, language="en", beam_size=1)

@@ -53,8 +53,8 @@ VALID_TRANSITIONS: dict[VoiceState, set[VoiceState]] = {
                            VoiceState.RECONNECTING, VoiceState.FAILED},
     VoiceState.THINKING: {VoiceState.SPEAKING, VoiceState.EXECUTING_TOOL, VoiceState.LISTENING,
                           VoiceState.RECONNECTING, VoiceState.FAILED},
-    VoiceState.SPEAKING: {VoiceState.LISTENING, VoiceState.THINKING, VoiceState.RECONNECTING,
-                          VoiceState.FAILED},
+    VoiceState.SPEAKING: {VoiceState.LISTENING, VoiceState.THINKING, VoiceState.EXECUTING_TOOL,
+                          VoiceState.RECONNECTING, VoiceState.FAILED},
     VoiceState.EXECUTING_TOOL: {VoiceState.THINKING, VoiceState.SPEAKING, VoiceState.LISTENING,
                                 VoiceState.RECONNECTING, VoiceState.FAILED},
     VoiceState.RECONNECTING: {VoiceState.LISTENING, VoiceState.IDLE, VoiceState.FAILED},
@@ -196,28 +196,12 @@ class VoiceEngineConfig:
     mic_queue_maxsize: int = 50
     speaker_queue_maxsize: int = 200
 
-    # Barge-in: mic stays hot even while VYREN is speaking (true full-duplex —
-    # required for Gemini's server-side VAD to ever see the interruption and
-    # fire `server_content.interrupted`, which is what actually stops
-    # playback). A short energy gate still exists (see engine.py) purely to
-    # avoid re-triggering off VYREN's own voice bleeding into the mic on
-    # speaker setups without hardware echo cancellation; use headphones for
-    # the cleanest barge-in.
-    # Default OFF: full-duplex barge-in requires the mic to stay live
-    # while VYREN is speaking, gated only by loudness. On setups where
-    # the mic picks up VYREN's own output strongly enough (speaker
-    # bleed, dual output routing, etc.), that gate isn't enough — Gemini's
-    # own server-side VAD sees the bleed as a real interruption and reacts
-    # to it *instantly* via the sc.interrupted path, which bypasses local
-    # gating entirely by design (a real interruption should be instant).
-    # There's no cheap fix for that without actual acoustic echo
-    # cancellation (referencing the outgoing signal and subtracting it
-    # from the mic input), which isn't implemented. Until it is, mic-off-
-    # while-speaking is the only setting that's guaranteed correct on
-    # every setup. Set True only once AEC exists, or if you've confirmed
-    # your specific hardware doesn't bleed (e.g. headset mic physically
-    # far from any speaker, single active output device).
-    barge_in_enabled: bool = False
+    # Barge-in: mic stays hot even while VYREN is speaking.
+    # This is the default for modern full-duplex voice assistants.
+    # A loudness gate still protects against obvious playback bleed on
+    # non-headphone setups; for true robustness, add acoustic echo
+    # cancellation before sending frames to Gemini.
+    barge_in_enabled: bool = True
     barge_in_rms_threshold: int = 900  # int16 RMS floor to count as "real" speech
 
     # Mic heartbeat: if no frames queued in this many seconds, mic is dead

@@ -87,8 +87,17 @@ class ToolRegistry:
         tool = self._tools.get(name)
         return tool.safety_level == "consequential" if tool else False
 
-    def to_gemini_tools(self) -> list[dict]:
-        """Convert all registered tools to Gemini's function declaration format.
+    def to_gemini_tools(self, names: list[str] | None = None) -> list[dict]:
+        """Convert registered tools to Gemini's function declaration format.
+
+        names: if given, only include tools whose name is in this list
+        (order-preserving is not required; lookup is by name). Used to
+        hand the voice session a small, curated tool subset instead of
+        all 47 — the full set was previously excluded from voice
+        entirely because of 1007 config-size errors and latency; a
+        small named subset avoids both while still letting Gemini
+        actually call real tools during a live conversation instead of
+        just narrating that it did.
 
         Returns a list with a single dict: [{"function_declarations": [...]}]
         Each declaration is a raw dict (NOVA's proven pattern), NOT a
@@ -100,7 +109,10 @@ class ToolRegistry:
         more predictable and match how google-genai internally serializes them.
         """
         declarations = []
+        wanted = set(names) if names is not None else None
         for tool in self._tools.values():
+            if wanted is not None and tool.name not in wanted:
+                continue
             # Double-check name validity (defensive)
             if not _sanitize_tool_name(tool.name):
                 logger.warning("Skipping invalid tool name: '%s'", tool.name)
@@ -124,18 +136,66 @@ class ToolRegistry:
 
     def execute(self, name: str, args: dict) -> str:
         """Run a tool by name with the given arguments.
-        Returns the result as a string, or an error message.
-        Never crashes -- errors are returned as plain text for the model."""
+
+        Returns a string prefixed with an explicit status tag —
+        [TOOL_STATUS: SUCCESS], [TOOL_STATUS: FAILED], or
+        [TOOL_STATUS: PARTIAL] — followed by the actual result. This is
+        the verification layer: it doesn't stop the model from narrating
+        badly, but it puts an honest, mechanically-determined signal in
+        front of every result so the model has no ambiguity to exploit
+        ("I don't know if it worked" is no longer a possible read of the
+        function_response). Never crashes -- errors are returned as
+        plain text for the model, tagged FAILED.
+        """
         tool = self._tools.get(name)
         if not tool:
-            return f"Error: Unknown tool '{name}'. No tool with that name is registered."
+            return self._tag(
+                "FAILED",
+                f"Unknown tool '{name}'. No tool with that name is registered.",
+            )
         try:
             result = tool.handler(**args)
-            return str(result) if result is not None else "Done."
         except TypeError as e:
-            return f"Error calling {name}: wrong arguments. {e}"
+            return self._tag("FAILED", f"Error calling {name}: wrong arguments. {e}")
         except Exception as e:
-            return f"Error in {name}: {type(e).__name__} -- {e}"
+            return self._tag("FAILED", f"Error in {name}: {type(e).__name__} -- {e}")
+
+        return self._tag(*self._classify(result))
+
+    @staticmethod
+    def _tag(status: str, text: str) -> str:
+        return f"[TOOL_STATUS: {status}] {text}"
+
+    _FAILURE_MARKERS = (
+        "error", "failed", "failure", "not found", "not available",
+        "not initialized", "does not exist", "no such", "denied",
+        "unauthorized", "unable to", "could not", "invalid ",
+        "permission denied", "timed out", "timeout",
+    )
+
+    @classmethod
+    def _classify(cls, result: Any) -> tuple[str, str]:
+        """Determine (status, text) from a raw handler return value.
+
+        Handlers weren't written with SUCCESS/FAILED/PARTIAL in mind —
+        most signal failure by convention (a plain string describing
+        what went wrong) rather than by raising. Real conventions found
+        across the tool files: "Error: ...", "X not found", "X not
+        available", "X failed", "Permission denied: ...", etc. — not
+        just an "Error:" prefix. Scan for the actual phrasing in use
+        rather than assume one convention, or a whole class of real
+        failures gets mistagged as SUCCESS just because nothing threw.
+        """
+        if result is None:
+            return "SUCCESS", "Done."
+        text = str(result)
+        stripped = text.strip()
+        if not stripped:
+            return "PARTIAL", "(Tool ran but returned no output.)"
+        lowered = stripped.lower()
+        if any(marker in lowered for marker in cls._FAILURE_MARKERS):
+            return "FAILED", text
+        return "SUCCESS", text
 
 
 def _schema_to_gemini_dict(d: dict) -> dict:
@@ -201,7 +261,7 @@ def create_registry(
 
     registry = ToolRegistry()
 
-    register_memory(registry, memory_v2)
+    register_memory(registry, memory_v2=memory_v2, memory_store=memory_store)
     register_system(registry)
     register_file(registry)
     register_web(registry)

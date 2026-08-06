@@ -25,7 +25,39 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 
+from platform_abstraction import get_disk_root
+
 logger = logging.getLogger("vyren.server")
+
+
+async def _do_broadcast(clients: set, msg: dict):
+    dead = []
+    payload = json.dumps(msg)
+    for ws in list(clients):
+        try:
+            await ws.send_text(payload)
+        except Exception:
+            dead.append(ws)
+    for ws in dead:
+        clients.discard(ws)
+
+
+def _broadcast_to_web(ctx: dict, msg: dict):
+    """Thread-safe: safe to call from the voice engine's own thread/loop.
+
+    No-ops quietly if the web server hasn't started yet or has no
+    connected clients — this is a best-effort push, not a required path,
+    so a dashboard that's never been opened must never block or crash
+    a voice turn.
+    """
+    loop = ctx.get("web_loop")
+    clients = ctx.get("ws_clients")
+    if not loop or not clients:
+        return
+    try:
+        asyncio.run_coroutine_threadsafe(_do_broadcast(clients, msg), loop)
+    except Exception:
+        pass
 
 
 class WebServer:
@@ -125,6 +157,17 @@ class WebServer:
         )
 
         ctx = self._ctx
+        ctx.setdefault("ws_clients", set())
+
+        @app.on_event("startup")
+        async def _capture_web_loop():
+            # Voice runs on its own thread with its own event loop (see
+            # voice/runtime.py's _engine_thread). To push a spoken turn's
+            # result into this server's websocket connections from that
+            # other thread, we need a thread-safe handoff — that requires
+            # a reference to *this* loop, captured from inside it.
+            ctx["web_loop"] = asyncio.get_running_loop()
+            ctx["ws_broadcast"] = lambda msg: _broadcast_to_web(ctx, msg)
 
         # -- PWA + Static Files --
 
@@ -153,7 +196,7 @@ class WebServer:
         @app.get("/api/system")
         async def system_stats():
             mem = psutil.virtual_memory()
-            disk_root = "C:\\" if platform.system() == "Windows" else "/"
+            disk_root = get_disk_root()
             try:
                 disk = psutil.disk_usage(disk_root)
                 disk_data = {
@@ -283,10 +326,18 @@ class WebServer:
                 }
             return {"active": False}
 
+        @app.get("/api/camera")
+        async def camera_status():
+            camera = ctx.get("camera")
+            if camera:
+                return camera.status()
+            return {"available": False}
+
         # -- WebSocket Chat --
         @app.websocket("/ws/chat")
         async def chat(websocket: WebSocket):
             await websocket.accept()
+            ctx["ws_clients"].add(websocket)
             history: list[dict] = []
             audit = ctx.get("audit")
             if audit:
@@ -356,6 +407,27 @@ class WebServer:
 
                     user_text = data["text"].strip()
                     if not user_text:
+                        continue
+
+                    voice_runtime = ctx.get("voice_runtime")
+                    if voice_runtime and voice_runtime.is_active and voice_runtime.mode != "fallback":
+                        # Same mechanism runtime/terminal.py already uses
+                        # successfully: inject into the live Gemini Live
+                        # session so the reply comes back as real speech,
+                        # not a disconnected text-only completion. The
+                        # actual response arrives asynchronously via
+                        # ws_broadcast once the turn completes (see
+                        # voice/runtime.py:_on_turn_complete) — every
+                        # connected browser tab gets it, this one included,
+                        # so we don't try to stream it inline here.
+                        if audit:
+                            audit.model_turn("user", user_text)
+                        await websocket.send_json({
+                            "type": "system_msg",
+                            "system_msg": "Sent to VYREN's voice session — reply will arrive as speech.",
+                        })
+                        voice_runtime.send_text(user_text)
+                        await websocket.send_json({"type": "done"})
                         continue
 
                     history.append({"role": "user", "parts": [{"text": user_text}]})
@@ -527,6 +599,8 @@ class WebServer:
                     })
                 except Exception:
                     pass
+            finally:
+                ctx["ws_clients"].discard(websocket)
 
         return app
 

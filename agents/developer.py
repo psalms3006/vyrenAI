@@ -86,7 +86,7 @@ class DeveloperAgent(BaseAgent):
         try:
             result = registry.execute("search_files", {
                 "pattern": "*.py",
-                "directory": os.path.expanduser("~") + "\\my-project",
+                "directory": str(get_vyren_dir() / "workspace" / "my-project"),
             })
             files = [line.strip() for line in result.split("\n") if line.strip() and not line.startswith("[")][:10]
             output_parts.append(f"Scanning {len(files)} Python files...")

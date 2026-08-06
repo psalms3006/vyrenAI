@@ -13,12 +13,14 @@ import os
 from datetime import datetime
 from pathlib import Path
 
+from platform_paths import get_memory_path
+
 
 class MemoryStore:
     """JSON-backed fact store. One key-value pair per fact."""
 
     def __init__(self, path: str | None = None):
-        self.path = Path(path or os.path.expanduser("~/.vyren/memory.json"))
+        self.path = get_memory_path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._data: dict[str, dict] = {}
         self._load()

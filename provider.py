@@ -10,6 +10,7 @@ Supports:
   - Google Gemini (online, primary)
   - Ollama (offline fallback, auto-detected)
 """
+from __future__ import annotations
 
 import json
 import os
@@ -18,14 +19,29 @@ from typing import Callable
 
 import httpx
 from dotenv import load_dotenv
-from google import genai
-from google.genai import types
 
 load_dotenv()
 
 DEFAULT_MODEL = "gemini-2.5-flash"
 OLLAMA_BASE_URL = "http://localhost:11434"
 OLLAMA_MODEL = "llama3.1"
+
+try:
+    from google import genai
+    from google.genai import types
+except Exception:  # pragma: no cover - optional dependency
+    genai = None  # type: ignore[assignment]
+    types = None  # type: ignore[assignment]
+
+    class _DummyClient:  # type: ignore[no-redef]
+        pass
+
+    class _DummyTypes:  # type: ignore[no-redef]
+        GenerateContentConfig = dict
+        Tool = object
+
+    genai = _DummyClient()  # type: ignore[assignment]
+    types = _DummyTypes()  # type: ignore[assignment]
 
 
 def _get_model() -> str:
@@ -40,7 +56,24 @@ def _get_client() -> genai.Client:
             "Copy .env.example to .env and add your key from "
             "https://aistudio.google.com/apikey"
         )
-    return genai.Client(api_key=api_key)
+    try:
+        return genai.Client(api_key=api_key)
+    except AttributeError as exc:
+        raise EnvironmentError(
+            "Gemini SDK unavailable or misconfigured. "
+            "Install google-genai or set GEMINI_API_KEY."
+        ) from exc
+
+
+_gemini_client: genai.Client | None = None
+
+
+def get_cached_client() -> genai.Client:
+    """Return a reused Gemini client, creating it on first call."""
+    global _gemini_client
+    if _gemini_client is None:
+        _gemini_client = _get_client()
+    return _gemini_client
 
 
 # ---------------------------------------------------------------------------
@@ -79,7 +112,6 @@ def _ollama_run_turn(
     on_chunk: Callable[[str], None] | None = None,
 ) -> TurnResult:
     """Run a turn using a local Ollama model. No tool calling in offline mode."""
-    # Convert Gemini-format messages to Ollama format
     ollama_messages = [{"role": "system", "content": system_prompt}]
     for msg in messages:
         role = msg.get("role", "user")
@@ -92,7 +124,6 @@ def _ollama_run_turn(
                     "content": part["text"],
                 })
             elif "function_response" in part:
-                # Tell the model what the tool returned (as user message)
                 fr = part["function_response"]
                 ollama_messages.append({
                     "role": "user",
@@ -150,7 +181,7 @@ def _gemini_run_turn(
     on_chunk: Callable[[str], None] | None = None,
 ) -> TurnResult:
     """Run a turn using Google Gemini."""
-    client = _get_client()
+    client = get_cached_client()
     model_name = _get_model()
 
     config_kwargs = {
@@ -224,18 +255,20 @@ def run_turn(
     if _run_ollama_last:
         if _ollama_available():
             result = _ollama_run_turn(messages, system_prompt, on_chunk)
-            # Check if we're back online — try Gemini again next time
             _run_ollama_last = False
             return result
-        else:
-            return _ollama_run_turn(messages, system_prompt, on_chunk)
+        return _ollama_run_turn(messages, system_prompt, on_chunk)
 
-    # Try Gemini
+    # Try Gemini if available
+    if genai is None or types is None:
+        if _ollama_available():
+            _run_ollama_last = True
+            return _ollama_run_turn(messages, system_prompt, on_chunk)
+        return TurnResult(text="[Gemini SDK unavailable and Ollama is not running.]")
+
     try:
         result = _gemini_run_turn(messages, system_prompt, tools, on_chunk)
-        # Check if the result is an API key error (not a network error)
         if "GEMINI_API_KEY" in result.text:
-            # No key configured — try Ollama
             if _ollama_available():
                 _run_ollama_last = True
                 return _ollama_run_turn(messages, system_prompt, on_chunk)
@@ -243,7 +276,6 @@ def run_turn(
         return result
 
     except (httpx.ConnectError, httpx.TimeoutException, ConnectionError, OSError) as e:
-        # Network error — try Ollama
         if _ollama_available():
             _run_ollama_last = True
             return _ollama_run_turn(messages, system_prompt, on_chunk)
@@ -258,6 +290,9 @@ def run_turn(
         )
 
     except EnvironmentError as e:
+        if _ollama_available():
+            _run_ollama_last = True
+            return _ollama_run_turn(messages, system_prompt, on_chunk)
         return TurnResult(text=str(e))
 
     except Exception as e:

@@ -32,19 +32,21 @@ import threading
 logger = logging.getLogger("vyren.terminal")
 
 
-def start_terminal_loop(ctx: dict, shutdown_event: threading.Event):
+def start_terminal_loop(ctx: dict, shutdown_event: threading.Event, interaction_controller=None):
     """
     Start the terminal text loop in a background thread.
-    This is the SECONDARY interface — voice is primary.
+
+    interaction_controller: optional interaction controller used for
+    mode-aware input handling.
     """
-    t = threading.Thread(target=_terminal_loop, args=(ctx, shutdown_event),
+    t = threading.Thread(target=_terminal_loop, args=(ctx, shutdown_event, interaction_controller),
                          name="vyren-terminal", daemon=True)
     t.start()
     return t
 
 
-def _terminal_loop(ctx: dict, shutdown_event: threading.Event):
-    """The terminal REPL loop (secondary interface)."""
+def _terminal_loop(ctx: dict, shutdown_event: threading.Event, interaction_controller=None):
+    """The terminal REPL loop."""
     import safety
     from provider import run_turn
 
@@ -208,6 +210,24 @@ def _terminal_loop(ctx: dict, shutdown_event: threading.Event):
         if not user_input:
             continue
 
+        try:
+            if interaction_controller is not None:
+                interaction_controller.on_user_input()
+                if not interaction_controller.may_speak():
+                    # If voice is unavailable/in fallback, typed input must
+                    # still work. Force conversation mode so the user is
+                    # never silently blocked from the text fallback.
+                    if voice_runtime and getattr(voice_runtime, "mode", None) == "fallback":
+                        try:
+                            interaction_controller.set_user_mode("conversation")
+                        except Exception:
+                            pass
+                    if not interaction_controller.may_speak():
+                        print("  [VYREN is quiet — enable conversation mode or use wake word]")
+                        continue
+        except Exception:
+            pass
+
         # ---- Conversation Turn ----
         # UNIFIED CONVERSATION (2026-07-16 fix):
         # When voice is active, route typed text into the live voice session
@@ -219,27 +239,51 @@ def _terminal_loop(ctx: dict, shutdown_event: threading.Event):
         # needs tool-calling from typed input, use /text mode or when
         # voice is unavailable.
         
-        if voice_runtime and voice_runtime.is_active:
+        use_voice = (
+            voice_runtime
+            and voice_runtime.is_active
+            and voice_runtime.mode != "fallback"
+        )
+        if use_voice:
+            try:
+                if interaction_controller is not None:
+                    interaction_controller.on_user_input()
+                    # In fallback mode there is no voice path, so typed input
+                    # must always reach the text fallback. Only enforce quiet
+                    # mode when a real voice session could otherwise handle it.
+                    if (
+                        voice_runtime is not None
+                        and getattr(voice_runtime, "mode", None) == "fallback"
+                    ):
+                        pass
+                    elif not interaction_controller.may_speak():
+                        print("  [VYREN is quiet — enable conversation mode or use wake word]")
+                        continue
+            except Exception:
+                pass
+        
+        if use_voice:
             # --- Voice-active path: send to Gemini Live for SPOKEN reply ---
             logger.info("Terminal input -> Voice session (spoken reply): '%s'", 
                        user_input[:80])
             
             if audit:
                 audit.model_turn("user", user_input)
-                audit.info(f"Terminal text routed to voice session")
+                audit.info("Terminal text routed to voice session")
             
-            # Send text into the live voice session — Gemini will respond
-            # with audio (spoken reply via TTS). The response will be
-            # played through speakers automatically by the voice engine.
+            voice_runtime._reply_event.clear()
             voice_runtime.send_text(user_input)
-            
-            # Also record in terminal's local history so /clear works
-            # and we have context if voice drops mid-conversation
             history.append({"role": "user", "parts": [{"text": user_input}]})
             
-            # Visual feedback: let user know their text was sent to voice
-            # (The spoken reply will come from the voice engine's audio output)
-            print("  [sent to voice session — listening for reply...]\n")
+            if voice_runtime._reply_event.wait(timeout=voice_runtime._pending_reply_timeout):
+                reply = voice_runtime.get_last_assistant_reply()
+                if reply:
+                    print(f"  VYREN: {reply}\n")
+            else:
+                # Hard fallback: voice turn timed out, use text path so the
+                # user always gets a response instead of hanging silently.
+                print("  [Voice turn timed out — switching to text fallback...]\n")
+                _handle_text_only_turn(ctx, history, user_input, registry, audit)
             
         elif not registry:
             print("  [System not ready]\n")
@@ -363,42 +407,5 @@ def _handle_text_only_turn(ctx: dict, history: list, user_input: str,
 
 def _execute_post_confirmation(name: str, args: dict, sentinel: str) -> str:
     """Execute actions approved through the confirmation gate."""
-    try:
-        if name == "shutdown_system":
-            import subprocess
-            subprocess.run(["shutdown", "/s", "/t", "5"], check=False)
-            return "Shutdown initiated."
-        elif name == "restart_system":
-            import subprocess
-            subprocess.run(["shutdown", "/r", "/t", "5"], check=False)
-            return "Restart initiated."
-        elif name == "delete_file":
-            path = args.get("file_path", "")
-            os.remove(path)
-            return f"Deleted: {path}"
-        elif name == "edit_file":
-            path = args.get("file_path", "")
-            content = args.get("content", "")
-            resolved = os.path.realpath(path)
-            os.makedirs(os.path.dirname(resolved), exist_ok=True)
-            with open(resolved, "w", encoding="utf-8") as f:
-                f.write(content)
-            lines = content.count("\n") + 1
-            return f"File written: {resolved} ({lines} lines)"
-        elif name == "run_python":
-            import subprocess
-            code = args.get("code", "")
-            timeout = args.get("timeout", 30)
-            python_exe = sys.executable or "python"
-            result = subprocess.run(
-                [python_exe, "-c", code],
-                capture_output=True, text=True, timeout=timeout,
-            )
-            output = result.stdout
-            if result.stderr:
-                output += "\n" + result.stderr
-            return output if output.strip() else "(no output)"
-        else:
-            return sentinel
-    except Exception as e:
-        return f"Error executing {name}: {type(e).__name__} -- {e}"
+    from post_confirmation import execute_post_confirmation
+    return execute_post_confirmation(name, args, sentinel)

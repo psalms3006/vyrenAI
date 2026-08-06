@@ -4,9 +4,10 @@ Read-only system info tools are safe. Any tool that changes system state
 (shutdown, restart, etc.) is marked consequential and requires confirmation.
 """
 
+from platform_abstraction import get_disk_root, get_env
+
 import platform
 import psutil
-import shutil
 
 from tools import ToolDef, ToolRegistry
 
@@ -15,9 +16,9 @@ def register(registry: ToolRegistry):
 
     def get_system_info() -> str:
         """Get current system status: OS, CPU, RAM, disk, battery."""
+        env = get_env()
         lines = []
-        # OS
-        lines.append(f"OS: {platform.system()} {platform.release()} ({platform.machine()})")
+        lines.append(f"OS: {env.platform} ({platform.system()} {platform.release()} ({platform.machine()}))")
         lines.append(f"Hostname: {platform.node()}")
 
         # CPU
@@ -32,7 +33,8 @@ def register(registry: ToolRegistry):
                      f"{mem.total // (1024**3)}GB)")
 
         # Disk
-        disk = psutil.disk_usage("/")
+        disk_root = get_disk_root()
+        disk = psutil.disk_usage(disk_root)
         lines.append(f"Disk: {disk.percent}% used ({disk.free // (1024**3)}GB free of "
                      f"{disk.total // (1024**3)}GB)")
 
@@ -76,10 +78,24 @@ def register(registry: ToolRegistry):
 
     def shutdown_system() -> str:
         """Shut down the computer. REQUIRES CONFIRMATION."""
+        try:
+            from environment import get_capabilities
+            caps = get_capabilities()
+            if not caps.is_desktop:
+                return f"Shutdown is not supported on this environment: {caps.platform}"
+        except Exception:
+            pass
         return "SHUTDOWN_REQUESTED"
 
     def restart_system() -> str:
         """Restart the computer. REQUIRES CONFIRMATION."""
+        try:
+            from environment import get_capabilities
+            caps = get_capabilities()
+            if not caps.is_desktop:
+                return f"Restart is not supported on this environment: {caps.platform}"
+        except Exception:
+            pass
         return "RESTART_REQUESTED"
 
     registry.register(ToolDef(
