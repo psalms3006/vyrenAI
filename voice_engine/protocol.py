@@ -201,8 +201,9 @@ class VoiceEngineConfig:
     # A loudness gate still protects against obvious playback bleed on
     # non-headphone setups; for true robustness, add acoustic echo
     # cancellation before sending frames to Gemini.
-    barge_in_enabled: bool = True
-    barge_in_rms_threshold: int = 900  # int16 RMS floor to count as "real" speech
+    barge_in_enabled: bool = True  # Enabled for interrupt/barge-in as requested.
+    # Without AEC, this can still pick up speaker bleed on non-headphone setups.
+    barge_in_rms_threshold: int = 1200  # int16 RMS floor to count as "real" speech
 
     # Mic heartbeat: if no frames queued in this many seconds, mic is dead
     # 10s gives the mic time to start producing after session connect.

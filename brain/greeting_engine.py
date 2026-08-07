@@ -98,7 +98,7 @@ def _load_history() -> list[dict]:
     try:
         if not _HISTORY_PATH.exists():
             return []
-        with open(_HISTORY_PATH, "r") as f:
+        with open(_HISTORY_PATH, "r", encoding="utf-8") as f:
             raw = json.load(f)
     except Exception:
         return []
@@ -114,7 +114,7 @@ def _load_history() -> list[dict]:
 def _save_history(history: list[dict]):
     _HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
     try:
-        with open(_HISTORY_PATH, "w") as f:
+        with open(_HISTORY_PATH, "w", encoding="utf-8") as f:
             json.dump(history[-_MAX_HISTORY:], f)
     except Exception as e:
         logger.debug(f"Could not persist greeting history: {e}")
@@ -236,7 +236,7 @@ class LocalContentProvider(GreetingProvider):
     def __init__(self):
         self._bank: dict[str, list[str]] = {}
         try:
-            with open(_BANK_PATH, "r") as f:
+            with open(_BANK_PATH, "r", encoding="utf-8") as f:
                 self._bank = json.load(f)
         except Exception as e:
             logger.warning(f"Greeting content bank missing/unreadable: {e}")

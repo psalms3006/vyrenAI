@@ -311,6 +311,12 @@ def create_registry(
     except Exception as e:
         logger.warning("Agent tools not loaded: %s", e)
 
+    try:
+        from tools.browser_tools import register as register_browser
+        register_browser(registry)
+    except Exception as e:
+        logger.warning("Browser tools not loaded: %s", e)
+
     # Log final tool count (helps diagnose 1007 errors)
     names = registry.tool_names()
     logger.info("Tool registry ready: %d tools loaded", len(names))

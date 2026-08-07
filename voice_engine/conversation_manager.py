@@ -52,6 +52,7 @@ _VALID_TRANSITIONS: dict[str, set[str]] = {
     },
     ConversationPhase.SPEAKING: {
         ConversationPhase.LISTENING,
+        ConversationPhase.THINKING,
         ConversationPhase.INTERRUPTED,
         ConversationPhase.RECONNECTING,
         ConversationPhase.IDLE,

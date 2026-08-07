@@ -16,7 +16,7 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Any, Callable, Iterable, Optional
 
-from hand_tracking import GestureEvent, GestureRecognizer, Hand, HandBackend, SyntheticHandBackend
+from hand_tracking import GestureEvent, GestureRecognizer, GestureType, Hand, HandBackend, SyntheticHandBackend
 
 logger = logging.getLogger("vyren.hand_tracking.engine")
 
@@ -119,7 +119,7 @@ class HandTrackingEngine:
                 continue
             event = self._recognizer.recognize(best_hand, self._previous)
             now = time.monotonic()
-            if event.gesture != "NONE" and (event.gesture != last_gesture_name or now - last_gesture_time > cooldown):
+            if event.gesture != GestureType.NONE and (event.gesture != last_gesture_name or now - last_gesture_time > cooldown):
                 with self._lock:
                     self._history.append(event)
                     self._frames += 1

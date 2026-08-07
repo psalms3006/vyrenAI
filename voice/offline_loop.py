@@ -183,13 +183,27 @@ class OfflineVoiceLoop:
     # One utterance: STT -> reasoning -> TTS
     # ------------------------------------------------------------------
 
+    def handle_text(self, text: str):
+        """Process typed text directly through the offline reasoning
+        pipeline, bypassing transcription. This is what makes typed
+        input work while voice is in offline fallback mode — previously
+        send_text() in voice/runtime.py only ever talked to the Gemini
+        Live engine, so typing anything while offline was a silent
+        no-op with no error."""
+        text = (text or "").strip()
+        if not text:
+            return
+        self._process_reasoning_turn(text)
+
     def _handle_utterance(self, pcm16: bytes):
         text = self._transcribe(pcm16)
         if not text or not text.strip():
             return
         text = text.strip()
         logger.info(f"[OFFLINE] Heard: {text[:100]}")
+        self._process_reasoning_turn(text)
 
+    def _process_reasoning_turn(self, text: str):
         reasoning = self._ctx.get("reasoning")
         if reasoning is None:
             self._speak("I heard you, but my reasoning engine isn't wired up right now.")

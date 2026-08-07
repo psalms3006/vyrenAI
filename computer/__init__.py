@@ -101,7 +101,7 @@ def list_running_apps() -> str:
 
 def open_application(app_name: str) -> str:
     """Open an application by name across platforms."""
-    import shutil
+    import os
     app_lower = app_name.lower()
 
     app_commands = {
@@ -110,13 +110,14 @@ def open_application(app_name: str) -> str:
         "notepad": "notepad",
         "calculator": "calc" if is_windows() else "gnome-calculator",
         "explorer": "explorer" if is_windows() else "xdg-open .",
-        "browser": "start msedge" if is_windows() else "xdg-open https://",
-        "chrome": "start chrome" if is_windows() else "google-chrome",
-        "firefox": "start firefox" if is_windows() else "firefox",
-        "terminal": "start cmd" if is_windows() else "x-terminal-emulator",
-        "cmd": "start cmd" if is_windows() else "x-terminal-emulator",
-        "powershell": "start powershell" if is_windows() else "x-terminal-emulator",
+        "browser": "msedge" if is_windows() else "xdg-open https://",
+        "chrome": "chrome" if is_windows() else "google-chrome",
+        "firefox": "firefox" if is_windows() else "firefox",
+        "terminal": "cmd" if is_windows() else "x-terminal-emulator",
+        "cmd": "cmd" if is_windows() else "x-terminal-emulator",
+        "powershell": "powershell" if is_windows() else "x-terminal-emulator",
         "file explorer": "explorer" if is_windows() else "xdg-open .",
+        "settings": "ms-settings:" if is_windows() else "xdg-open ms-settings:",
     }
 
     cmd = app_commands.get(app_lower, app_name)
@@ -125,7 +126,15 @@ def open_application(app_name: str) -> str:
         caps = get_capabilities()
         if not caps.can_open_apps:
             return f"Opening apps is not supported on this environment: {caps.platform}"
-        result = subprocess.run(cmd, capture_output=True, text=True, shell=True, timeout=10)
+        if is_windows():
+            # Use non-blocking launch on Windows so URI/apps do not fail
+            # on subprocess completion semantics.
+            try:
+                os.startfile(cmd)
+            except OSError:
+                subprocess.Popen(cmd, shell=True, close_fds=True)
+        else:
+            subprocess.Popen(cmd, shell=True, close_fds=True)
         return f"Opened: {app_name}"
     except Exception as e:
         return f"Failed to open {app_name}: {e}"

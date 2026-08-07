@@ -15,8 +15,8 @@ from tools import ToolDef, ToolRegistry
 
 
 def _get_generated_dir() -> str:
-    from hermes_constants import get_hermes_home
-    return str(get_hermes_home() / "generated")
+    from platform_paths import get_generated_dir
+    return str(get_generated_dir())
 
 
 def register(registry: ToolRegistry):
@@ -117,7 +117,7 @@ def register(registry: ToolRegistry):
                     types.Content(
                         role="user",
                         parts=[
-                            types.Part.from_text(question),
+                            types.Part.from_text(text=question),
                             types.Part.from_bytes(
                                 data=base64.b64decode(img_data),
                                 mime_type=mime,

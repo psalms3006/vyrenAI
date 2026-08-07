@@ -44,7 +44,11 @@ from typing import Any
 
 try:
     from google.genai import types as _genai_types
-except Exception:  # pragma: no cover - optional dependency absent
+except Exception as _genai_import_exc:  # pragma: no cover - optional dependency absent
+    logging.getLogger("vyren.voice").error(
+        "google.genai import failed — Gemini Live will be unavailable: %s",
+        _genai_import_exc, exc_info=True,
+    )
     class _FakeGenaiTypes:
         LiveConnectConfig = object  # type: ignore[assignment]
     _genai_types = _FakeGenaiTypes()  # type: ignore[assignment]
@@ -69,7 +73,11 @@ try:
     from voice_engine.protocol import ToolCall, ToolResult, TurnTranscription, VoiceEngineConfig
     from voice_engine import diagnostics as diag
     from voice_engine.conversation_manager import ConversationPhase
-except Exception:  # pragma: no cover - optional dependency absent
+except Exception as _voice_engine_import_exc:  # pragma: no cover - optional dependency absent
+    logging.getLogger("vyren.voice").error(
+        "voice_engine import failed — Gemini Live will be unavailable: %s",
+        _voice_engine_import_exc, exc_info=True,
+    )
     class _FakeModule:
         def __getattr__(self, name):
             return _FakeModule()
@@ -306,15 +314,21 @@ class VoiceRuntime:
             pass
         if self._engine and self._engine.is_active:
             self._engine.send_text(text.strip())
+        elif self._offline_loop is not None:
+            self._offline_loop.handle_text(text.strip())
+        else:
+            logger.warning(
+                "[TEXT] No active engine and no offline loop — typed "
+                "input has nowhere to go. Voice mode is '%s'.", self.mode,
+            )
 
     def get_last_assistant_reply(self) -> str:
-        return " ".join(
-            part["text"]
-            for turn in reversed(self.recent_turns)
-            if turn.get("role") == "model"
-            for part in turn.get("parts", [])
-            if part.get("text")
-        ).strip()
+        # Was: joining every model-role turn in recent_turns, reversed —
+        # which doesn't return "the last reply", it concatenates the
+        # entire conversation history backwards into one ever-growing
+        # string. self._last_reply is already correctly maintained
+        # per-turn in _on_turn_complete; just use it.
+        return (self._last_reply or "").strip()
 
     def get_status(self) -> dict:
         status = {
@@ -463,9 +477,16 @@ class VoiceRuntime:
         if registry:
             try:
                 voice_tools = registry.to_gemini_tools(names=[
-                    "capture_screen", "capture_and_analyze",
-                    "analyze_image", "generate_image",
-                    "remember", "recall",
+                    "capture_screen",
+                    "capture_and_analyze",
+                    "analyze_image",
+                    "edit_file",
+                    "list_directory",
+                    "read_file",
+                    "browser_control",
+                    "open_app",
+                    "remember",
+                    "recall",
                 ]) or None
             except Exception as e:
                 logger.warning("Voice tool subset unavailable, continuing without tools: %s", e)
@@ -533,7 +554,7 @@ class VoiceRuntime:
             if key in _SUPPORTED_LIVE_CONFIG_KEYS and value is not None
         }
         cfg = types.LiveConnectConfig(**live_kwargs)
-        return cfg.model_dump_json(exclude_none=True)
+        return cfg
 
     def _build_system_prompt(self) -> str:
         """Build VYREN's system prompt with all context, under a hard cap."""
@@ -554,6 +575,19 @@ class VoiceRuntime:
             "- Honor tool status tags: SUCCESS/FAILED/PARTIAL. Never claim\n"
             "  success if a tool failed or only partially completed.\n"
             "- If you do not know something, say so plainly."
+        )
+        parts.append(
+            "Voice Conversation Rules (this session is SPOKEN — pacing matters "
+            "more than in text):\n"
+            "- Keep replies to 1-2 sentences unless the user asked for detail "
+            "or you're reporting data they requested.\n"
+            "- Don't narrate what you're about to do (\"Let me check that for "
+            "you...\") — just call the tool, then report the result briefly.\n"
+            "- Never repeat yourself. Say a thing once and stop talking.\n"
+            "- Don't ask a clarifying question unless truly necessary — make "
+            "the reasonable assumption and proceed.\n"
+            "- After a tool call resolves, give the result in one short "
+            "sentence, not a recap of what you did."
         )
         parts.append("Current date and time: " + datetime.now().strftime("%A, %B %d, %Y — %I:%M %p"))
 
@@ -795,6 +829,16 @@ class VoiceRuntime:
         self._fallback_mode = True
         self._fallback_reason = reason
         logger.info(f"Voice: Fallback mode starting ({reason}) — local STT/reasoning/TTS")
+
+        # Notify state immediately, even if the loop below can't fully
+        # start. This is what unblocks InteractionController out of its
+        # default "silent" mode (see runtime/manager.py
+        # _on_voice_state_for_greeting) — previously this call only fired
+        # from inside _fallback_main(), which never started when
+        # sounddevice was missing, leaving the assistant permanently
+        # gated behind "conversation mode or wake word" with no voice
+        # and no working text fallback.
+        self._notify_state("fallback")
 
         if not self._has_sounddevice():
             logger.error("Voice: Offline fallback unavailable because sounddevice is not installed")

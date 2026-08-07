@@ -1,0 +1,48 @@
+{
+  "voice_tool_subset": {
+    "tool_count": 50,
+    "voice_tools": [
+      "capture_screen",
+      "capture_and_analyze",
+      "analyze_image",
+      "edit_file",
+      "list_directory",
+      "read_file",
+      "browser_control",
+      "open_app",
+      "remember",
+      "recall"
+    ]
+  },
+  "barge_in": {
+    "enabled": true,
+    "rms_threshold": 1200,
+    "note": "Barge-in is enabled with a raised RMS gate to reduce false interruptions from speaker bleed."
+  },
+  "desktop_control": {
+    "settings_launch": "Opened: settings",
+    "notepad_launch": "Opened: notepad",
+    "browser_control_registered": true,
+    "brightness_tool": "Brightness set to 50%"
+  },
+  "filesystem_tools": {
+    "list_directory_project_root": true,
+    "edit_file_write": "voice_proof_test.txt created with content",
+    "read_file_result": "ALPHA\nB\nC\n",
+    "test_file_exists": true
+  },
+  "evidence_files": [
+    "evidence/camera_snapshot.png",
+    "evidence/screen_capture.png",
+    "evidence/ai_research.md",
+    "evidence/proof_of_work_report.json",
+    "evidence/voice_tool_proof.json"
+  ],
+  "changes": [
+    "voice/runtime.py: expanded voice tool subset to include filesystem, browser, and open_app tools.",
+    "voice/runtime.py: restored typed LiveConnectConfig return contract.",
+    "voice_engine/protocol.py: enabled barge-in by default and raised RMS threshold.",
+    "computer/__init__.py: added settings app launch mapping and switched to non-blocking Windows app launch.",
+    "tools/computer_tools.py: added set_brightness tool for Windows brightness control."
+  ]
+}

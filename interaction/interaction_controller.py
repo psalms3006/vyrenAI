@@ -305,14 +305,36 @@ class InteractionController:
             return False
         return self.state_machine.is_listening()
 
+    def _wake_to_active_conversation(self) -> bool:
+        """Transition to ACTIVE_CONVERSATION, walking the legal chain if
+        a direct jump isn't allowed from the current state.
+
+        BACKGROUND -> ACTIVE_CONVERSATION is not a legal direct
+        transition (see interaction/conversation_state.py's
+        VALID_TRANSITIONS — BACKGROUND only permits PASSIVE_LISTENING,
+        SLEEP, OFF). Since the controller boots into BACKGROUND and
+        nothing else ever transitions it through PASSIVE_LISTENING
+        first, every direct-jump attempt was silently rejected forever,
+        leaving is_quiet() permanently True and may_speak() permanently
+        False for the text path regardless of user mode. Voice bypassed
+        this entirely (it never calls may_speak()), which is why voice
+        kept working while typed input never did.
+        """
+        sm = self.state_machine
+        if sm.transition(ACTIVE_CONVERSATION):
+            return True
+        for intermediate in (PASSIVE_LISTENING, AWAITING_WAKE_WORD):
+            sm.transition(intermediate)
+        return sm.transition(ACTIVE_CONVERSATION)
+
     def on_wake_word_detected(self) -> None:
         if not self.may_activate():
             return
-        if self.state_machine.transition(ACTIVE_CONVERSATION, reason="wake_word"):
+        if self._wake_to_active_conversation():
             self.start_conversation()
 
     def on_user_input(self) -> None:
-        if self.state_machine.transition(ACTIVE_CONVERSATION, reason="user_input"):
+        if self._wake_to_active_conversation():
             self.start_conversation()
         self.note_user_activity()
 
@@ -343,8 +365,8 @@ class InteractionController:
     def on_user_activity(self) -> None:
         self.note_user_activity()
         if not self.state_machine.is_active_conversation():
-            self.state_machine.transition(ACTIVE_CONVERSATION, reason="user_activity")
-            self.start_conversation()
+            if self._wake_to_active_conversation():
+                self.start_conversation()
 
     def on_notification(self, payload: dict[str, Any]) -> bool:
         """

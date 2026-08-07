@@ -222,14 +222,42 @@ class GeminiLiveVoiceEngine:
         if not text:
             return
 
+        # Diagnostic: confirm the outgoing text is clean UTF-8 before it
+        # goes anywhere near the websocket. If this ever logs "NOT clean
+        # UTF-8", that's a smoking gun for the greeting/text path as the
+        # source of 1007 "invalid frame payload data" — websocket close
+        # code 1007 is, per RFC 6455, specifically defined as invalid
+        # UTF-8 in a text frame.
+        try:
+            text.encode("utf-8", errors="strict")
+            logger.debug("[SEND_TEXT] %d chars, clean UTF-8", len(text))
+        except UnicodeEncodeError as enc_err:
+            logger.error(
+                "[SEND_TEXT] text is NOT clean UTF-8 (this is likely the "
+                "1007 trigger): %s | repr=%r", enc_err, text,
+            )
+
         async def _do():
             try:
-                await self._session.send_client_content(
-                    turns={"parts": [{"text": text}]},
-                    turn_complete=True,
-                )
+                # send_realtime_input, not send_client_content: this
+                # session also streams continuous mic audio via
+                # send_realtime_input in the sender worker. Google's own
+                # SDK docs for send_client_content explicitly warn:
+                # "Interleaving send_client_content and
+                # send_realtime_input in the same conversation is not
+                # recommended and can lead to unexpected results." That
+                # was happening here — every observed 1007 "invalid
+                # frame payload data" landed within ~1s of a
+                # send_client_content call (greeting or typed text),
+                # zero exceptions. send_realtime_input has a native
+                # text= parameter that stays in the same channel as the
+                # audio stream instead of interleaving a second API.
+                async with self._send_lock:
+                    await self._session.send_realtime_input(audio_stream_end=True)
+                    await self._session.send_realtime_input(text=text)
                 diag.log_transcription_user(text)
             except Exception as e:
+                logger.error("[SEND_TEXT] send_realtime_input(text=...) failed: %s", e, exc_info=True)
                 diag.log_error("send_text", e)
 
         if self._loop.is_running():
@@ -434,8 +462,6 @@ class GeminiLiveVoiceEngine:
         # Build config (uses build_config_callback if available)
         config = self._build_session_config()
 
-        config = self._build_session_config()
-
         # Log tool info for diagnostics (helps catch 1007 errors)
         tool_count = 0
         if config.tools:
@@ -447,6 +473,13 @@ class GeminiLiveVoiceEngine:
         logger.info("Connecting with %d tools, model=%s", tool_count, self._config.model)
         self._mic_queue = asyncio.Queue(maxsize=self._config.mic_queue_maxsize)
         self._speaker_queue = asyncio.Queue(maxsize=self._config.speaker_queue_maxsize)
+        # Serializes realtime-input sends between the continuous mic
+        # audio worker and send_text() (greeting/typed input). Without
+        # this, an audio chunk and a text send can land on the wire
+        # concurrently even with an audio_stream_end boundary signal,
+        # since nothing previously prevented the two from interleaving
+        # at the actual send() call.
+        self._send_lock = asyncio.Lock()
 
         # Initialize mic heartbeat to NOW so the first supervisor check
         # doesn't trigger a false "MIC DEAD" (was 0.0 → instant false positive)
@@ -571,9 +604,26 @@ class GeminiLiveVoiceEngine:
         Detect mic death (no frames for N seconds).
         """
         max_worker_restarts = 5
+        _mic_diag_ticks = 0
 
         while self._active and not self._stop_event.is_set():
             await asyncio.sleep(self._supervisor_interval)
+
+            # Throttled visibility into whether mic audio is actually
+            # flowing, not just whether the stream is "open". This is
+            # the one thing we still can't see from existing logs —
+            # "MIC opened" only proves the device was claimed, not that
+            # frames are reaching Gemini while the user speaks.
+            _mic_diag_ticks += 1
+            if _mic_diag_ticks % 5 == 0:  # ~every 10s at 2s interval
+                c = diag.get_counters()
+                logger.info(
+                    "[MIC_DIAG] frames_sent=%d frames_dropped=%d "
+                    "seconds_since_last_frame=%.1f",
+                    c.get("mic_frames_sent", 0),
+                    c.get("mic_frames_dropped", 0),
+                    time.monotonic() - c.get("last_mic_frame_time", 0),
+                )
 
             # GoAway already told us the server is closing this session.
             # Exit the `async with client.aio.live.connect(...)` block on
@@ -760,7 +810,7 @@ class GeminiLiveVoiceEngine:
 
             loop.call_soon_threadsafe(
                 _safe_enqueue,
-                {"data": data, "mime_type": "audio/pcm"},
+                {"data": data, "mime_type": f"audio/pcm;rate={self._config.send_sample_rate}"},
             )
 
         try:
@@ -869,9 +919,10 @@ class GeminiLiveVoiceEngine:
                 msg = await asyncio.wait_for(self._mic_queue.get(), timeout=0.5)
                 if not self._session:
                     break
-                await self._session.send_realtime_input(
-                    audio=types.Blob(data=msg["data"], mime_type=msg["mime_type"])
-                )
+                async with self._send_lock:
+                    await self._session.send_realtime_input(
+                        audio=types.Blob(data=msg["data"], mime_type=msg["mime_type"])
+                    )
                 self._workers["sender"]["last_heartbeat"] = time.monotonic()
             except asyncio.TimeoutError:
                 continue

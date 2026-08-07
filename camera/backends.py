@@ -145,7 +145,16 @@ class _OpenCvBackend:
         if not HAS_CV2:
             raise RuntimeError("OpenCV is not available")
 
-        cap = cv2.VideoCapture(self._config.camera_index, cv2.CAP_DSHOW)
+        cap = None
+        try:
+            cap = cv2.VideoCapture(self._config.camera_index, cv2.CAP_DSHOW)
+            if not cap.isOpened():
+                cap.release()
+                cap = None
+        except Exception:
+            cap = None
+        if cap is None:
+            cap = cv2.VideoCapture(self._config.camera_index)
         if not cap.isOpened():
             raise RuntimeError(f"Failed to open camera index={self._config.camera_index}")
 

@@ -46,28 +46,28 @@ mss>=10
 # ==========================================================
 
 # Vision
-# opencv-python>=4.10
+opencv-python>=4.10
 
 # OCR
-# easyocr>=1.7.2
+easyocr>=1.7.2
 
 # Desktop Automation
-# pyautogui>=0.9.54
-# pygetwindow>=0.0.9
-# pyperclip>=1.9
-# watchdog>=5
+pyautogui>=0.9.54
+pygetwindow>=0.0.9
+pyperclip>=1.9
+watchdog>=5
 
 # AI / Semantic Memory
-# sentence-transformers>=3
-# faiss-cpu
+sentence-transformers>=3
+faiss-cpu
 
 # Offline Knowledge
-# beautifulsoup4>=4.12
-# lxml>=5.2
+beautifulsoup4>=4.12
+lxml>=5.2
 
 # Misc utilities (not currently imported anywhere)
-# scipy>=1.15
-# soundfile>=0.13
-# requests>=2.32
-# tqdm>=4.67
-# packaging>=24
+scipy>=1.15
+soundfile>=0.13
+requests>=2.32
+tqdm>=4.67
+packaging>=24

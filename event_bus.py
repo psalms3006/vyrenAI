@@ -49,6 +49,17 @@ class EventBus:
     def publish_sync(self, event: Event) -> None:
         self.publish(event)
 
+    def clear_subscribers(self, event_type: str | None = None) -> None:
+        """Remove subscribers. With no argument, clears all event types.
+        Called during shutdown (runtime/manager.py, core/__init__.py) —
+        this method never existed before, so shutdown always logged an
+        AttributeError here instead of actually releasing handlers."""
+        with self._lock:
+            if event_type is None:
+                self._subscribers.clear()
+            else:
+                self._subscribers.pop(event_type, None)
+
 
 _GESTURE_TYPE_ALIASES = {
     "GestureDetected": "GestureDetected",

@@ -34,7 +34,7 @@ _MAX_HISTORY = 10
 def _load_history() -> list[str]:
     try:
         if _GREETING_HISTORY_PATH.exists():
-            with open(_GREETING_HISTORY_PATH, "r") as f:
+            with open(_GREETING_HISTORY_PATH, "r", encoding="utf-8") as f:
                 return json.load(f)
     except Exception:
         pass
@@ -44,7 +44,7 @@ def _load_history() -> list[str]:
 def _save_history(history: list[str]) -> None:
     try:
         _GREETING_HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with open(_GREETING_HISTORY_PATH, "w") as f:
+        with open(_GREETING_HISTORY_PATH, "w", encoding="utf-8") as f:
             json.dump(history[-_MAX_HISTORY:], f)
     except Exception:
         pass

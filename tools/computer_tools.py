@@ -1,3 +1,4 @@
+import subprocess
 """tools/computer_tools.py -- Computer control tools.
 
 Keyboard, mouse, clipboard, terminal, application control.
@@ -28,6 +29,25 @@ def register(registry: ToolRegistry):
     def open_app(app_name: str) -> str:
         """Open an application by name. REQUIRES CONFIRMATION."""
         return f"OPEN_APP_REQUESTED: {app_name}"
+
+    def set_brightness(level: int = 50) -> str:
+        """Set screen brightness on Windows. REQUIRES CONFIRMATION."""
+        try:
+            ps = (
+                "(Get-WmiObject -Namespace root/WMI -Class WmiMonitorBrightnessMethods).WmiSetBrightness(1,"
+                f" {max(0, min(100, int(level)))})"
+            )
+            out = subprocess.run(
+                ["powershell", "-Command", ps],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if out.returncode == 0:
+                return f"Brightness set to {level}%"
+            return f"Brightness tool error: {out.stderr.strip() or out.stdout.strip()}"
+        except Exception as e:
+            return f"Brightness tool failed: {type(e).__name__} -- {e}"
 
     def press_key_tool(key: str) -> str:
         """Press a keyboard key. REQUIRES CONFIRMATION."""
@@ -66,6 +86,13 @@ def register(registry: ToolRegistry):
         description="Open an application by name (e.g. 'vscode', 'chrome', 'notepad').",
         parameters={"type": "object", "properties": {"app_name": {"type": "string", "description": "Application name to open"}}, "required": ["app_name"]},
         handler=open_app,
+        safety_level="consequential",
+    ))
+    registry.register(ToolDef(
+        name="set_brightness",
+        description="Set Windows screen brightness to a percentage (0-100).",
+        parameters={"type": "object", "properties": {"level": {"type": "integer", "description": "Brightness percent 0-100"}}},
+        handler=set_brightness,
         safety_level="consequential",
     ))
     registry.register(ToolDef(

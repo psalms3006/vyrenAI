@@ -870,6 +870,18 @@ class RuntimeManager:
         """
         if self._greeting_fired.wait(timeout=20.0):
             return  # Already fired via the normal state-change path
+        # Belt-and-suspenders for interaction mode too: if voice never
+        # reported a speakable state, _on_voice_state_for_greeting never
+        # ran, so InteractionController is still stuck on its default
+        # "silent" mode. Without this, VYREN speaks one watchdog greeting
+        # and then every turn after is silently gated ("VYREN is quiet —
+        # enable conversation mode or use wake word").
+        try:
+            ctrl = self._services.get("interaction_controller")
+            if ctrl is not None:
+                ctrl.set_user_mode("conversation")
+        except Exception:
+            pass
         self._fire_greeting_once()
 
     def _fire_greeting_once(self):
