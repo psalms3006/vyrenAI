@@ -15,6 +15,7 @@ def register(registry: ToolRegistry):
         get_text,
         go_to,
         press,
+        screenshot,
         scroll,
         search,
         smart_click,
@@ -38,7 +39,7 @@ def register(registry: ToolRegistry):
         """Control the web browser.
 
         action: go_to | search | click | type | scroll | press |
-                get_text | fill_form | smart_click | smart_type | close
+                get_text | fill_form | smart_click | smart_type | screenshot | close
         """
         action = (action or "").strip().lower()
         try:
@@ -64,6 +65,8 @@ def register(registry: ToolRegistry):
                 return press(key=key, timeout=timeout)
             if action == "get_text":
                 return get_text(timeout=timeout)
+            if action == "screenshot":
+                return screenshot(timeout=timeout)
             if action == "fill_form":
                 return fill_form(fields=fields or {}, timeout=max(timeout, 60))
             if action == "smart_click":
@@ -86,7 +89,7 @@ def register(registry: ToolRegistry):
             description=(
                 "Control the web browser with Playwright. "
                 "Actions: go_to, search, click, type, scroll, press, "
-                "get_text, fill_form, smart_click, smart_type, close."
+                "get_text, fill_form, smart_click, smart_type, screenshot, close."
             ),
             parameters={
                 "type": "object",
