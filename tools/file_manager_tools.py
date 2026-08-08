@@ -44,6 +44,31 @@ def register(registry: ToolRegistry):
         except Exception as e:
             return json.dumps({"status": "error", "error": str(e)})
 
+    def write_file(path: str, content: str) -> str:
+        """Write content to a file."""
+        try:
+            p = Path(path)
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(content, encoding="utf-8")
+            return json.dumps({"status": "success", "path": path, "bytes": len(content)})
+        except Exception as e:
+            return json.dumps({"status": "error", "error": str(e)})
+
+    def patch_file(path: str, search: str, replace: str) -> str:
+        """Simple search and replace within a file."""
+        try:
+            p = Path(path)
+            if not p.exists():
+                return json.dumps({"status": "error", "error": "File not found"})
+            content = p.read_text(encoding="utf-8")
+            if search not in content:
+                return json.dumps({"status": "error", "error": f"Search string not found in {path}"})
+            new_content = content.replace(search, replace, 1)
+            p.write_text(new_content, encoding="utf-8")
+            return json.dumps({"status": "success", "path": path, "applied": True})
+        except Exception as e:
+            return json.dumps({"status": "error", "error": str(e)})
+
     registry.register(ToolDef(
         name="find_file",
         description="Recursively search for files by name or extension.",
@@ -68,4 +93,35 @@ def register(registry: ToolRegistry):
             "required": ["path"]
         },
         handler=read_file
+    ))
+
+    registry.register(ToolDef(
+        name="write_file",
+        description="Write new content to a file. Overwrites if exists.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "path": {"type": "string"},
+                "content": {"type": "string"}
+            },
+            "required": ["path", "content"]
+        },
+        handler=write_file,
+        safety_level="consequential"
+    ))
+
+    registry.register(ToolDef(
+        name="patch_file",
+        description="Replace the first occurrence of 'search' with 'replace' in a file.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "path": {"type": "string"},
+                "search": {"type": "string"},
+                "replace": {"type": "string"}
+            },
+            "required": ["path", "search", "replace"]
+        },
+        handler=patch_file,
+        safety_level="consequential"
     ))

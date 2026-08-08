@@ -133,19 +133,29 @@ def register(registry: ToolRegistry):
 
     def ocr_image(file_path: str, backend: str = "auto") -> str:
         """Run OCR on an image, PDF page, screenshot, or camera frame path."""
+        import json
+        from pathlib import Path
         try:
             from vision.ocr import resolve_backend
             source = file_path
             ocr_backend = resolve_backend(backend)
             result = ocr_backend.detect_text(source)
-            parts = [result.text or ""]
+            
+            result_data = {
+                "status": "success",
+                "text": result.text or "",
+                "backend": result.backend,
+                "confidence": result.confidence,
+                "word_count": len(result.words)
+            }
+            
             if result.error:
-                parts.append(f"[ocr_error backend={result.backend} error={result.error}]")
-            if not result.words:
-                parts.append("[ocr_no_words]")
-            return "\n".join(part for part in parts if part)
+                result_data["status"] = "error"
+                result_data["error"] = result.error
+                
+            return json.dumps(result_data)
         except Exception as e:
-            return f"OCR failed: {type(e).__name__} — {e}"
+            return json.dumps({"status": "error", "error": f"{type(e).__name__}: {e}"})
 
     registry.register(ToolDef(
         name="generate_image",
