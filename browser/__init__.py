@@ -8,6 +8,7 @@ tool/agent architecture as a singleton browser session manager.
 from __future__ import annotations
 
 import asyncio
+import base64
 import concurrent.futures
 import logging
 import platform
@@ -389,6 +390,15 @@ class _BrowserThread:
                 continue
         return f"Could not find input: '{description}'"
 
+    async def _screenshot(self) -> str:
+        page = await self._get_page()
+        try:
+            img_bytes = await page.screenshot(type="png", full_page=False)
+            b64_data = base64.b64encode(img_bytes).decode("utf-8")
+            return f"data:image/png;base64,{b64_data}"
+        except Exception as e:
+            return f"Screenshot error: {e}"
+
     async def _close_browser(self) -> str:
         if self._browser:
             try:
@@ -475,6 +485,11 @@ def smart_click(description: str, timeout: int = 30) -> str:
 def smart_type(description: str, text: str, timeout: int = 30) -> str:
     _ensure_started()
     return _browser.run(_browser._smart_type(description, text), timeout=timeout)
+
+
+def screenshot(timeout: int = 30) -> str:
+    _ensure_started()
+    return _browser.run(_browser._screenshot(), timeout=timeout)
 
 
 def close_browser(timeout: int = 15) -> str:
