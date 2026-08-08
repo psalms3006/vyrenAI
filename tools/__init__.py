@@ -255,6 +255,8 @@ def create_registry(
     from tools.memory_tools import register as register_memory
     from tools.system_tools import register as register_system
     from tools.file_tools import register as register_file
+    from tools.terminal_tools import register as register_terminal
+    from tools.file_manager_tools import register as register_file_manager
     from tools.web_tools import register as register_web
     from tools.dev_tools import register as register_dev
     from tools.vision_tools import register as register_vision
@@ -264,6 +266,8 @@ def create_registry(
     register_memory(registry, memory_v2=memory_v2, memory_store=memory_store)
     register_system(registry)
     register_file(registry)
+    register_terminal(registry)
+    register_file_manager(registry)
     register_web(registry)
     register_dev(registry)
     register_vision(registry)
