@@ -399,6 +399,14 @@ class _BrowserThread:
         except Exception as e:
             return f"Screenshot error: {e}"
 
+    async def _screenshot_to_file(self, path: str) -> str:
+        page = await self._get_page()
+        try:
+            await page.screenshot(path=path, full_page=False)
+            return path
+        except Exception as e:
+            return f"Screenshot file error: {e}"
+
     async def _close_browser(self) -> str:
         if self._browser:
             try:
@@ -490,6 +498,12 @@ def smart_type(description: str, text: str, timeout: int = 30) -> str:
 def screenshot(timeout: int = 30) -> str:
     _ensure_started()
     return _browser.run(_browser._screenshot(), timeout=timeout)
+
+
+def save_screenshot(path: str, timeout: int = 30) -> str:
+    if not _started:
+        raise RuntimeError("Browser has not been started. Call a navigation tool first.")
+    return _browser.run(_browser._screenshot_to_file(path), timeout=timeout)
 
 
 def close_browser(timeout: int = 15) -> str:
