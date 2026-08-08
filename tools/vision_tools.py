@@ -51,11 +51,14 @@ def register(registry: ToolRegistry):
                     mime = part.inline_data.mime_type or "image/png"
 
                     # Determine save path
+                    from pathlib import Path
+                    gen_dir = Path(_get_generated_dir())
+
                     if not save_path:
                         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        save_path = str(get_generated_dir() / f"generated_{timestamp}.png")
-
-                    save_path = str(get_generated_dir() / save_path)
+                        save_path = str(gen_dir / f"generated_{timestamp}.png")
+                    else:
+                        save_path = str(gen_dir / save_path)
                     os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
 
                     ext = ".png" if "png" in mime else ".jpg"
