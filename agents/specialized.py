@@ -37,29 +37,6 @@ class PlannerAgent(BaseAgent):
         )
 
 
-class DeveloperAgent(BaseAgent):
-    """Writes, analyzes, and refactors code."""
-
-    name = "developer"
-    description = "Senior software engineer: writes code, analyzes codebases, refactors, debugs"
-    capabilities = [
-        AgentCapability("write_code", "Write new code in any language"),
-        AgentCapability("analyze_code", "Analyze existing code for bugs and improvements"),
-        AgentCapability("refactor", "Refactor and improve code structure"),
-        AgentCapability("debug", "Diagnose and fix bugs"),
-    ]
-
-    async def _execute(self, task: str, context: dict) -> AgentResult:
-        registry = context.get("registry")
-        if not registry:
-            return AgentResult(agent=self.name, task=task, success=False, error="Registry not in context")
-
-        # The developer agent uses the existing tools
-        return AgentResult(
-            agent=self.name, task=task, success=True,
-            output=f"Developer agent ready for task: {task[:80]}",
-        )
-
 
 class ResearcherAgent(BaseAgent):
     """Finds information from the web and knowledge base."""
@@ -105,6 +82,7 @@ class ReviewAgent(BaseAgent):
 
 def register_default_agents(registry) -> list:
     """Register all default specialized agents."""
+    from agents.developer import DeveloperAgent
     agents = [PlannerAgent(), DeveloperAgent(), ResearcherAgent(), ReviewAgent()]
     for agent in agents:
         registry.register(agent)
