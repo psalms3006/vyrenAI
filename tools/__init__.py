@@ -315,12 +315,18 @@ def create_registry(
     except Exception as e:
         logger.warning("Agent tools not loaded: %s", e)
 
+    from tools.browser_tools import register as register_browser
+    register_browser(registry)
     try:
-        from tools.browser_tools import register as register_browser
-        register_browser(registry)
+        from tools.camera_tools import register as register_camera
+        register_camera(registry)
     except Exception as e:
-        logger.warning("Browser tools not loaded: %s", e)
-
+        logger.warning("Camera tools not loaded: %s", e)
+    try:
+        from tools.hand_tracking_tools import register as register_hand
+        register_hand(registry)
+    except Exception as e:
+        logger.warning("Hand tracking tools not loaded: %s", e)
     try:
         from tools.url_tools import register as register_url
         register_url(registry)

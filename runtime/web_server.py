@@ -471,20 +471,6 @@ class WebServer:
             except Exception as exc:
                 return {"status": "error", "error": str(exc)}
 
-        @app.get("/api/memory")
-        async def get_memory(q: str = ""):
-            mem = ctx.get("memory_v2")
-            if not mem:
-                return []
-            try:
-                items = mem.list_all()
-            except Exception:
-                return []
-            q = (q or "").strip().lower()
-            if not q:
-                return items
-            return [item for item in items if q in str(item.get("key", "")).lower() or q in str(item.get("value", "")).lower()][:200]
-
         @app.post("/api/memory")
         async def add_memory(payload: dict):
             mem = ctx.get("memory_v2")
@@ -497,6 +483,21 @@ class WebServer:
                 return {"ok": True}
             except Exception as exc:
                 return {"ok": False, "error": str(exc)}
+
+        @app.post("/api/tools/execute")
+        async def execute_tool(payload: dict):
+            reg = ctx.get("registry")
+            if not reg:
+                return {"status": "error", "error": "registry unavailable"}
+            name = str((payload or {}).get("name") or "").strip()
+            args = payload.get("args") if isinstance(payload.get("args"), dict) else {}
+            if not name:
+                return {"status": "error", "error": "missing tool name"}
+            try:
+                result = reg.execute(name, args)
+                return {"status": "success", "result": result}
+            except Exception as exc:
+                return {"status": "error", "error": str(exc)}
 
         @app.post("/api/vision/toggle")
         async def vision_toggle(payload: dict):
@@ -543,10 +544,149 @@ class WebServer:
 
         @app.get("/api/camera")
         async def camera_status():
-            camera = ctx.get("camera")
-            if camera:
+            try:
+                from camera import CameraManager
+                camera = CameraManager()
                 return camera.status()
-            return {"available": False}
+            except Exception as exc:
+                return {"available": False, "error": str(exc)}
+
+        @app.post("/api/camera/capture_photo")
+        async def camera_capture_photo(payload: dict):
+            try:
+                from camera import CameraManager
+                path = str((payload or {}).get("path") or "")
+                camera = CameraManager()
+                camera.start()
+                try:
+                    out = camera.take_photo(path) if path else camera.take_photo("camera_photo.png")
+                    return {"status": "success", "path": str(out)}
+                finally:
+                    camera.stop()
+            except Exception as exc:
+                return {"status": "error", "error": str(exc)}
+
+        @app.post("/api/vision/capture")
+        async def vision_capture(payload: dict):
+            source = str((payload or {}).get("source") or "camera").strip().lower()
+            try:
+                if source == "screen":
+                    return await browser_screenshot_to_file(payload or {})
+                from camera import CameraManager
+                path = str((payload or {}).get("path") or "")
+                camera = CameraManager()
+                camera.start()
+                try:
+                    out = camera.take_photo(path) if path else camera.take_photo("vision_capture.png")
+                    return {"status": "success", "path": str(out), "source": "camera"}
+                finally:
+                    camera.stop()
+            except Exception as exc:
+                return {"status": "error", "error": str(exc)}
+
+        @app.get("/api/battery")
+        async def battery_status():
+            try:
+                battery = psutil.sensors_battery()
+                if not battery:
+                    return {"available": False}
+                return {
+                    "available": True,
+                    "percent": battery.percent,
+                    "charging": battery.power_plugged,
+                    "time_left_seconds": battery.secsleft if battery.secsleft >= 0 else None,
+                }
+            except Exception as exc:
+                return {"available": False, "error": str(exc)}
+
+        @app.get("/api/device")
+        async def device_info():
+            try:
+                return {
+                    "hostname": platform.node(),
+                    "os": f"{platform.system()} {platform.release()}",
+                    "cpu_cores": psutil.cpu_count(logical=True),
+                    "memory_total_gb": round(psutil.virtual_memory().total / (1024 ** 3), 1),
+                }
+            except Exception as exc:
+                return {"error": str(exc)}
+
+        @app.get("/api/messages")
+        async def get_messages():
+            return {"messages": [], "note": "messaging integration pending backend adapter"}
+
+        @app.post("/api/messages/send")
+        async def send_message(payload: dict):
+            return {"status": "error", "error": "messaging integration pending backend adapter"}
+
+        @app.post("/api/web/search")
+        async def web_search(payload: dict):
+            reg = ctx.get("registry")
+            if not reg:
+                return {"status": "error", "error": "registry unavailable"}
+            try:
+                result = reg.execute("web_search", {"query": str((payload or {}).get("query") or "")})
+                return {"status": "success", "result": result}
+            except Exception as exc:
+                return {"status": "error", "error": str(exc)}
+
+        @app.get("/api/capabilities")
+        async def capabilities():
+            reg = ctx.get("registry")
+            tools = []
+            if reg:
+                try:
+                    tools = [t.name for t in reg.all_tools()]
+                except Exception:
+                    tools = []
+            battery = psutil.sensors_battery()
+            return {
+                "tools": tools,
+                "battery_available": bool(battery),
+                "camera_available": True,
+                "hand_tracking_available": True,
+                "voice_available": bool(ctx.get("voice_runtime")),
+                "messaging_available": False,
+            }
+
+        @app.get("/api/hand-tracking")
+        async def hand_tracking_status():
+            try:
+                from hand_tracking import HandTrackingEngine
+                engine = HandTrackingEngine()
+                return engine.status()
+            except Exception as exc:
+                return {"active": False, "error": str(exc)}
+
+        @app.post("/api/hand-tracking/start")
+        async def hand_tracking_start():
+            try:
+                from hand_tracking import HandTrackingEngine
+                engine = HandTrackingEngine()
+                engine.start()
+                return {"status": "started"}
+            except Exception as exc:
+                return {"status": "error", "error": str(exc)}
+
+        @app.post("/api/hand-tracking/stop")
+        async def hand_tracking_stop():
+            try:
+                from hand_tracking import HandTrackingEngine
+                engine = HandTrackingEngine()
+                engine.stop()
+                return {"status": "stopped"}
+            except Exception as exc:
+                return {"status": "error", "error": str(exc)}
+
+        @app.get("/api/hand-tracking/recent")
+        async def hand_tracking_recent(limit: int = 20):
+            try:
+                from hand_tracking import HandTrackingEngine
+                engine = HandTrackingEngine()
+                events = engine.recent_gestures(limit=max(1, min(limit, 200)))
+                return {"events": [{"gesture": e.gesture, "confidence": e.confidence, "meta": e.meta} for e in events]}
+            except Exception as exc:
+                return {"events": [], "error": str(exc)}
 
         @app.get("/api/graph")
         async def graph_data():

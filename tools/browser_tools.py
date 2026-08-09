@@ -1,8 +1,6 @@
-"""tools/browser_tools.py -- Browser automation tools.
+"""tools/browser_tools.py -- Browser automation tools for VYREN."""
 
-Uses VYREN's browser singleton to open pages, search, click, type,
-scroll, read page text, fill forms, and close the browser.
-"""
+import json
 
 from tools import ToolDef, ToolRegistry
 
@@ -39,7 +37,8 @@ def register(registry: ToolRegistry):
         """Control the web browser.
 
         action: go_to | search | click | type | scroll | press |
-                get_text | fill_form | smart_click | smart_type | screenshot | close
+                get_text | fill_form | smart_click | smart_type |
+                screenshot | close
         """
         action = (action or "").strip().lower()
         try:
@@ -112,90 +111,3 @@ def register(registry: ToolRegistry):
             safety_level="safe",
         )
     )
-"""tools/browser_tools.py -- Browser automation tools for VYREN."""
-
-import json
-from tools import ToolDef, ToolRegistry
-from browser import (
-    go_to,
-    search,
-    click,
-    type_text,
-    scroll,
-    press,
-    get_text,
-    screenshot,
-    close_browser,
-)
-
-def register(registry: ToolRegistry):
-
-    def browser_control(action: str, **kwargs) -> str:
-        """Control the web browser.
-        action: go_to | search | click | type | scroll | press | get_text | screenshot | close
-        """
-        result_data = {"status": "success", "action": action}
-        try:
-            if action == "go_to":
-                res = go_to(kwargs.get("url", ""), timeout=kwargs.get("timeout", 30))
-                result_data["result"] = res
-            elif action == "search":
-                res = search(kwargs.get("query", ""), timeout=kwargs.get("timeout", 30))
-                result_data["result"] = res
-            elif action == "click":
-                res = click(kwargs.get("selector", ""), timeout=kwargs.get("timeout", 30))
-                result_data["result"] = res
-            elif action == "type":
-                res = type_text(kwargs.get("selector", ""), kwargs.get("text", ""), timeout=kwargs.get("timeout", 30))
-                result_data["result"] = res
-            elif action == "scroll":
-                res = scroll(kwargs.get("direction", "down"), timeout=kwargs.get("timeout", 30))
-                result_data["result"] = res
-            elif action == "press":
-                res = press(kwargs.get("key", ""), timeout=kwargs.get("timeout", 30))
-                result_data["result"] = res
-            elif action == "get_text":
-                res = get_text(timeout=kwargs.get("timeout", 30))
-                result_data["result"] = res
-            elif action == "screenshot":
-                res = screenshot(timeout=kwargs.get("timeout", 30))
-                result_data["result"] = res
-            elif action == "close":
-                res = close_browser(timeout=kwargs.get("timeout", 15))
-                result_data["result"] = res
-            else:
-                result_data["status"] = "error"
-                result_data["error"] = f"Unknown browser action: {action}"
-        except Exception as e:
-            result_data["status"] = "error"
-            result_data["error"] = str(e)
-
-        return json.dumps(result_data)
-
-    registry.register(ToolDef(
-        name="browser_control",
-        description=(
-            "Control the web browser with Playwright. "
-            "Actions: go_to, search, click, type, scroll, press, "
-            "get_text, screenshot, close."
-        ),
-        parameters={
-            "type": "object",
-            "properties": {
-                "action": {
-                    "type": "string",
-                    "enum": ["go_to", "search", "click", "type", "scroll", "press", "get_text", "screenshot", "close"],
-                },
-                "url": {"type": "string"},
-                "query": {"type": "string"},
-                "selector": {"type": "string"},
-                "text": {"type": "string"},
-                "direction": {"type": "string", "enum": ["up", "down"]},
-                "key": {"type": "string"},
-                "timeout": {"type": "integer"},
-            },
-            "required": ["action"],
-        },
-        handler=browser_control,
-        safety_level="safe",
-    ))

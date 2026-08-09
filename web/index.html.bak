@@ -1870,7 +1870,7 @@
       }
 
       .bottom-nav {
-        display: flex;
+        display: flex
       }
 
       .input-bar {
@@ -2757,25 +2757,6 @@
               <button id="btn-volume" class="fm-actions">Apply</button>
             </div>
           </div>
-
-          <div class="settings-section">
-            <div class="settings-section-title">Device</div>
-            <div class="settings-row">
-              <div class="settings-row-label">Battery</div>
-              <button id="btn-battery" class="fm-actions">Check</button>
-            </div>
-            <div class="settings-row">
-              <div class="settings-row-label">Search web</div>
-              <input id="web-search-input" placeholder="Search..." style="width:100%;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 10px;color:var(--txt-h);outline:none">
-              <button id="btn-web-search" class="fm-actions" style="margin-top:6px">Search</button>
-            </div>
-            <div class="settings-row">
-              <div class="settings-row-label">Send message</div>
-              <input id="msg-to-input" placeholder="To" style="width:100%;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 10px;color:var(--txt-h);outline:none">
-              <input id="msg-body-input" placeholder="Message" style="width:100%;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 10px;color:var(--txt-h);outline:none;margin-top:6px">
-              <button id="btn-send-message" class="fm-actions" style="margin-top:6px">Send</button>
-            </div>
-          </div>
         </div>
 
       </div>
@@ -2869,29 +2850,6 @@
 
   <!-- Reconnecting indicator bar -->
   <div class="reconnecting" id="reconnecting-bar" style="display:none"></div>
-
-    <div class="bottom-nav" id="bottom-nav">
-      <button class="bnav-item active" data-page="chats">
-        <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-        Chat
-      </button>
-      <button class="bnav-item" data-page="memory">
-        <svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 3 2 4 2 7v2h10v-2c0-3 2-4 2-7a7 7 0 0 0-7-7z"/><line x1="9" y1="21" x2="15" y2="21"/></svg>
-        Memory
-      </button>
-      <button class="bnav-item" data-page="vision">
-        <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-        Vision
-      </button>
-      <button class="bnav-item" data-page="dashboard">
-        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
-        Status
-      </button>
-      <button class="bnav-item" data-page="system">
-        <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-        System
-      </button>
-    </div>
 
   <script>
     // ═══════════════════════════════════════════════════════════
@@ -2990,14 +2948,6 @@
         setActivePage(page);
       });
 
-      document.getElementById('bottom-nav').addEventListener('click', (e) => {
-        const btn = e.target.closest('.bnav-item');
-        if (!btn) return;
-        const page = btn.getAttribute('data-page');
-        if (!page) return;
-        setActivePage(page);
-      });
-
       window.addEventListener('hashchange', () => {
         const key = (location.hash || '#chats').replace('#', '') || 'chats';
         setActivePage(key);
@@ -3040,49 +2990,6 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ level }),
           }).then(r => r.json()).then(data => alert(JSON.stringify(data))).catch(e => alert('Volume action failed: ' + e.message));
-        });
-      }
-      if ($('btn-battery')) {
-        $('btn-battery').addEventListener('click', async () => {
-          try {
-            const data = await fetch('/api/battery').then(r => r.json());
-            alert(JSON.stringify(data));
-          } catch (e) {
-            alert('Battery check failed: ' + e.message);
-          }
-        });
-      }
-      if ($('btn-web-search')) {
-        $('btn-web-search').addEventListener('click', async () => {
-          const q = ($('web-search-input') && $('web-search-input').value || '').trim();
-          if (!q) return;
-          try {
-            const data = await fetch('/api/web/search', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ query: q }),
-            }).then(r => r.json());
-            alert(JSON.stringify(data));
-          } catch (e) {
-            alert('Web search failed: ' + e.message);
-          }
-        });
-      }
-      if ($('btn-send-message')) {
-        $('btn-send-message').addEventListener('click', async () => {
-          const to = ($('msg-to-input') && $('msg-to-input').value || '').trim();
-          const body = ($('msg-body-input') && $('msg-body-input').value || '').trim();
-          if (!to || !body) return;
-          try {
-            const data = await fetch('/api/messages/send', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ to, body }),
-            }).then(r => r.json());
-            alert(JSON.stringify(data));
-          } catch (e) {
-            alert('Message send failed: ' + e.message);
-          }
         });
       }
     })();
@@ -3757,14 +3664,6 @@
     msgInput.addEventListener('input', () => { sendBtn.disabled = !msgInput.value.trim() || isSending; });
     msgInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
     sendBtn.addEventListener('click', sendMessage);
-    document.querySelectorAll('.chip[data-ask], .qbtn[data-ask]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const prefix = btn.getAttribute('data-ask') || '';
-        msgInput.value = prefix ? prefix + ' ' : '';
-        msgInput.focus();
-        sendMessage();
-      });
-    });
     document.getElementById('attach-btn').addEventListener('click', () => fileInput.click());
 
     // ── SYSTEM MONITOR (original, unchanged) ──
