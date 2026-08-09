@@ -14,12 +14,18 @@
     href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
   <link rel="apple-touch-icon"
     href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect fill='%2308080f' width='180' height='180' rx='40'/><text x='90' y='125' text-anchor='middle' font-size='110'>⚡</text></svg>">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="VYREN">
+  <meta name="theme-color" content="#08080f">
   <title>VYREN</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
     href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
     rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js">
+  </script>
   <style>
     /* ═══════════════════════════════════════════════════════════
    DESIGN TOKENS
@@ -473,11 +479,53 @@
       display: grid;
       grid-template-columns: 1fr var(--right-w);
       overflow: hidden;
-      transition: grid-template-columns .2s
+      transition: grid-template-columns .2s;
+      background: radial-gradient(ellipse at 50% 46%, #0e0e1c, #08080f 68%)
     }
 
     main.right-collapsed {
       grid-template-columns: 1fr 0px
+    }
+
+    #main-canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      pointer-events: none
+    }
+
+    main.canvas-active #main-canvas {
+      pointer-events: auto
+    }
+
+    #pages-wrap {
+      position: relative;
+      z-index: 1
+    }
+
+    .mode-switcher {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 10px
+    }
+
+    .mode-chip {
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--txt-m);
+      font-size: 11px;
+      cursor: pointer
+    }
+
+    .mode-chip.on {
+      border-color: var(--signal);
+      color: var(--signal);
+      background: var(--signal-d)
     }
 
     .page {
@@ -1755,6 +1803,59 @@
       .page {
         padding: 18px 16px
       }
+
+      #page-immersive {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: #05050a;
+        z-index: 50;
+        overflow: hidden;
+      }
+
+      #page-immersive.active {
+        display: block;
+      }
+
+      #immersive-canvas {
+        width: 100vw;
+        height: 100vh;
+        display: block;
+      }
+
+      .immersive-hud {
+        position: absolute;
+        left: 18px;
+        top: 18px;
+        color: #8a8a9a;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+        font-size: 11px;
+        pointer-events: none;
+        letter-spacing: .08em;
+        text-shadow: 0 1px 6px rgba(0,0,0,.7);
+        z-index: 2;
+      }
+
+      .immersive-hud b {
+        color: #c8c8d8;
+      }
+
+      .immersive-state {
+        margin-top: 6px;
+        font-weight: 600;
+        text-transform: uppercase;
+      }
+
+      .immersive-error {
+        position: absolute;
+        left: 18px;
+        bottom: 18px;
+        color: #ff7799;
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 11px;
+        z-index: 2;
+        display: none;
+      }
     }
   </style>
 </head>
@@ -1796,6 +1897,14 @@
             <line x1="2" y1="12" x2="22" y2="12" />
             <path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z" />
           </svg><span>Browser</span></div>
+        <div class="sb-item" data-page="graph"><svg viewBox="0 0 24 24">
+            <circle cx="5" cy="5" r="2" />
+            <circle cx="19" cy="5" r="2" />
+            <circle cx="12" cy="19" r="2" />
+            <line x1="5" y1="5" x2="19" y2="5" />
+            <line x1="12" y1="19" x2="5" y2="5" />
+            <line x1="12" y1="19" x2="19" y2="5" />
+          </svg><span>Graph</span></div>
         <div class="sb-item" data-page="skills"><svg viewBox="0 0 24 24">
             <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4l-6 6a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l6-6a4 4 0 0 0 5.4-5.4z" />
           </svg><span>Skills</span></div>
@@ -1818,8 +1927,13 @@
         <div class="sb-item" data-page="settings"><svg viewBox="0 0 24 24">
             <circle cx="12" cy="12" r="3" />
             <path
-              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 .33-1.82V9a1.65 1.65 0 0 0 1.51-1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
           </svg><span>Settings</span></div>
+        <div class="sb-item" data-page="system"><svg viewBox="0 0 24 24">
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+            <line x1="8" y1="21" x2="16" y2="21" />
+            <line x1="12" y1="17" x2="12" y2="21" />
+          </svg><span>System</span></div>
       </div>
       <div class="sb-foot">
         <button class="sb-collapse-btn" id="sb-collapse-btn" title="Collapse sidebar">
@@ -1850,6 +1964,12 @@
             <line x1="8" y1="23" x2="16" y2="23" />
           </svg>
         </button>
+        <button class="hdr-btn" id="immersive-btn" title="Immersive mode (I)">
+          <svg viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="10" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+        </button>
         <button class="hdr-btn" id="right-toggle-btn" title="Toggle workspace panel">
           <svg viewBox="0 0 24 24">
             <rect x="3" y="3" width="18" height="18" rx="2" />
@@ -1869,12 +1989,12 @@
 
     <!-- MAIN -->
     <main id="main">
-
-      <!-- Everything below is a "page" toggled by sidebar nav. -->
-      <div id="pages-wrap" style="overflow:hidden;display:flex;flex-direction:column;min-width:0">
+      <!-- Persistent 3D environment canvas behind all pages. -->
+      <canvas id="main-canvas" style="position:absolute;inset:0;width:100%;height:100%;z-index:0;pointer-events:none"></canvas>
+      <div id="pages-wrap" style="position:relative;z-index:1;overflow:hidden;display:flex;flex-direction:column;min-width:0">
 
         <!-- CHATS (live, unchanged behavior) -->
-        <div class="page" id="page-chats" style="display:none">
+        <div class="page active" id="page-chats">
           <div class="chat-layout">
             <div class="orb-zone">
               <div class="orb-wrap">
@@ -1886,6 +2006,19 @@
               </div>
               <div class="state-label" id="state-label">Initializing</div>
               <div class="waveform" id="waveform"></div>
+              <div class="mode-switcher" id="mode-switcher">
+                <button class="mode-chip on" data-mode="orb">Orb</button>
+                <button class="mode-chip" data-mode="memory">Memory</button>
+                <button class="mode-chip" data-mode="system">System</button>
+                <button class="mode-chip" data-mode="vision">Vision</button>
+                <button class="mode-chip" data-mode="activity">Activity</button>
+              </div>
+              <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
+                <button id="interrupt-btn" style="padding:10px 14px;border-radius:8px;border:1px solid var(--amber);background:transparent;color:var(--amber);cursor:pointer">Interrupt</button>
+                <input id="self-improve-input" placeholder="Self-improve prompt..." style="flex:1;min-width:180px;background:var(--bg-input);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--txt-h);outline:none">
+                <button id="self-improve-btn" style="padding:10px 14px;border-radius:8px;border:1px solid var(--signal);background:transparent;color:var(--signal);cursor:pointer">Run</button>
+              </div>
+              <pre id="self-improve-output" style="margin-top:10px;font-size:12px;color:var(--txt-m);max-height:220px;overflow:auto;white-space:pre-wrap"></pre>
             </div>
             <div class="chat-bottom">
               <div id="activity-log-inline">
@@ -1917,10 +2050,14 @@
             <div class="page-title">Memory</div>
             <div class="page-sub">Everything VYREN has chosen to keep, organized by how long it lasts.</div>
           </div>
-          <div class="mem-search"><input type="text" placeholder="Search memory..."></div>
+          <div class="mem-search">
+            <input type="text" id="mem-search-input" placeholder="Search memory..." autocomplete="off">
+            <button id="mem-search-btn" class="fm-actions" style="padding:8px 14px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--txt-h);cursor:pointer">Search</button>
+            <button id="mem-add-btn" class="fm-actions" style="padding:8px 14px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--txt-m);cursor:pointer">Add</button>
+          </div>
           <div class="mem-tier">
-            <div class="mem-tier-label">Pinned <span class="cnt">2</span></div>
-            <div class="mem-chip-list">
+            <div class="mem-tier-label">Pinned <span class="cnt" id="mem-pinned-cnt">2</span></div>
+            <div class="mem-chip-list" id="mem-pinned-list">
               <div class="mem-chip"><span class="dot"></span>Startup: Project NOVA — multi-agent AI OS, MCP integration
               </div>
               <div class="mem-chip"><span class="dot"></span>Startup: Project VYREN — voice-first, Gemini Live native
@@ -1928,8 +2065,8 @@
             </div>
           </div>
           <div class="mem-tier">
-            <div class="mem-tier-label">Long-Term <span class="cnt">14</span></div>
-            <div class="mem-chip-list">
+            <div class="mem-tier-label">Long-Term <span class="cnt" id="mem-long-cnt">14</span></div>
+            <div class="mem-chip-list" id="mem-long-list">
               <div class="mem-chip"><span class="dot"></span>User is a Mechatronics Engineering student, ML lead on the
                 team</div>
               <div class="mem-chip"><span class="dot"></span>Prefers direct, no-filler communication style</div>
@@ -1937,8 +2074,8 @@
             </div>
           </div>
           <div class="mem-tier">
-            <div class="mem-tier-label">Recent <span class="cnt">6</span></div>
-            <div class="mem-chip-list">
+            <div class="mem-tier-label">Recent <span class="cnt" id="mem-recent-cnt">6</span></div>
+            <div class="mem-chip-list" id="mem-recent-list">
               <div class="mem-chip"><span class="dot"></span>Debugged Gemini Live voice engine self-conversation loop
               </div>
               <div class="mem-chip"><span class="dot"></span>Merged legacy memory store into MemoryManager (v2)</div>
@@ -1948,7 +2085,7 @@
           <div class="grid-cards" style="margin-top:6px">
             <div class="card stat-card">
               <div class="stat-label">Total entries</div>
-              <div class="stat-val">142</div>
+              <div class="stat-val" id="mem-total">142</div>
             </div>
             <div class="card stat-card">
               <div class="stat-label">Layers active</div>
@@ -1956,7 +2093,7 @@
             </div>
             <div class="card stat-card">
               <div class="stat-label">Last consolidation</div>
-              <div class="stat-val" style="font-size:14px">54m ago</div>
+              <div class="stat-val" style="font-size:14px" id="mem-consolidation">54m ago</div>
             </div>
           </div>
         </div>
@@ -2043,6 +2180,7 @@
           <div class="fm-toolbar">
             <div class="drop-zone" id="fm-drop-zone" style="flex:1">
               <span class="dz-icon">+</span>Drop a file here or click to upload
+              <input type="file" id="fm-file-input" style="display:none">
             </div>
           </div>
           <div class="mem-tier-label" style="margin-bottom:10px">Recent files</div>
@@ -2084,13 +2222,15 @@
             <div class="es-title">Vision is idle</div>
             <div class="es-sub">No screen capture or continuous analysis running. Enable it below to let VYREN see what
               you see.</div>
+            <button id="vision-enable-btn" style="margin-top:14px;padding:10px 14px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--txt-h);cursor:pointer">Enable vision</button>
+            <div id="vision-status" style="margin-top:10px;font-size:12px;color:var(--txt-m)">Idle.</div>
           </div>
           <div class="settings-row" style="margin-top:18px">
             <div>
               <div class="settings-row-label">Continuous screen analysis</div>
               <div class="settings-row-desc">VYREN watches your active window and narrates changes</div>
             </div>
-            <div class="toggle" data-toggle></div>
+            <div class="toggle" data-toggle="vision-toggle"></div>
           </div>
           <div class="settings-row">
             <div>
@@ -2104,20 +2244,51 @@
         <!-- BROWSER -->
         <div class="page" id="page-browser">
           <div class="page-head">
-            <div class="page-eyebrow">Automation</div>
-            <div class="page-title">Browser</div>
-            <div class="page-sub">VYREN's web automation activity — navigation, clicks, and page reads.</div>
+            <div class="page-eyebrow">Web</div>
+            <div class="page-title">Browser &amp; URLs</div>
+            <div class="page-sub">Paste a URL to ingest it, inspect page content, and feed the knowledge graph.</div>
           </div>
-          <div class="empty-state"
-            style="border:1px dashed var(--border);border-radius:var(--r-lg);background:var(--glass)">
-            <div class="es-icon"><svg viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="10" />
-                <line x1="2" y1="12" x2="22" y2="12" />
-                <path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z" />
-              </svg></div>
-            <div class="es-title">No active session</div>
-            <div class="es-sub">Ask VYREN to open or research something on the web and this page will show what it's
-              doing, live.</div>
+          <div class="grid-cards" style="grid-template-columns: 1fr 1fr; gap: 14px">
+            <div class="card" style="grid-column: 1 / -1">
+              <div class="card-title">Ingest URL</div>
+              <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+                <input type="text" id="url-input" placeholder="https://..." style="flex:1;min-width:220px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 12px;color:var(--txt-h);outline:none">
+                <button id="url-ingest-btn" style="padding:10px 14px;border-radius:var(--r-sm);border:1px solid var(--border2);background:transparent;color:var(--txt-h);cursor:pointer">Ingest</button>
+                <button id="url-open-btn" style="padding:10px 14px;border-radius:var(--r-sm);border:1px solid var(--border);background:transparent;color:var(--txt-m);cursor:pointer">Open</button>
+              </div>
+              <div id="url-status" style="margin-top:10px;font-size:12px;color:var(--txt-m)">Idle.</div>
+            </div>
+            <div class="card">
+              <div class="card-title">Extracted content</div>
+              <div id="url-content" style="font-size:12px;color:var(--txt-m);max-height:320px;overflow:auto;white-space:pre-wrap">No URL ingested yet.</div>
+            </div>
+            <div class="card">
+              <div class="card-title">Knowledge graph</div>
+              <div id="url-graph" style="font-size:12px;color:var(--txt-m);max-height:320px;overflow:auto">Graph updates after ingestion.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- GRAPH -->
+        <div class="page" id="page-graph">
+          <div class="page-head">
+            <div class="page-eyebrow">Knowledge</div>
+            <div class="page-title">Knowledge Graph</div>
+            <div class="page-sub">Interactive graph of entities, URLs, and relationships.</div>
+          </div>
+          <div class="grid-cards" style="grid-template-columns: 1fr 320px; gap: 14px">
+            <div class="card" style="min-height:520px;padding:0;overflow:hidden">
+              <div id="graph-canvas" style="width:100%;height:520px;background:var(--bg)"></div>
+            </div>
+            <div class="card">
+              <div class="card-title">Stats</div>
+              <div id="graph-stats" style="font-size:12px;color:var(--txt-m)">Loading...</div>
+              <div style="margin-top:10px"><button id="graph-refresh" style="padding:8px 14px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--txt-h);cursor:pointer">Refresh</button></div>
+              <div class="card-title" style="margin-top:14px">Selection</div>
+              <div id="graph-selection" style="font-size:12px;color:var(--txt-m)">Click a node.</div>
+              <div class="card-title" style="margin-top:14px">Search</div>
+              <input type="text" id="graph-search" placeholder="Search nodes..." style="width:100%;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 10px;color:var(--txt-h);outline:none">
+            </div>
           </div>
         </div>
 
@@ -2184,7 +2355,7 @@
         </div>
 
         <!-- DASHBOARD -->
-        <div class="page" id="page-dashboard">
+        <div class="page active" id="page-dashboard">
           <div class="page-head">
             <div class="page-eyebrow">Overview</div>
             <div class="page-title">Dashboard</div>
@@ -2360,6 +2531,45 @@
           </div>
         </div>
 
+        <!-- SYSTEM -->
+        <div class="page" id="page-system">
+          <div class="page-head">
+            <div class="page-eyebrow">System</div>
+            <div class="page-title">System Controls</div>
+            <div class="page-sub">Manage VYREN and your system.</div>
+          </div>
+          <div class="settings-section">
+            <div class="settings-section-title">VYREN</div>
+            <div class="settings-row">
+              <div class="settings-row-label">Shutdown VYREN</div>
+              <button id="btn-shutdown-vyren" class="fm-actions">Shutdown</button>
+            </div>
+          </div>
+          <div class="settings-section">
+            <div class="settings-section-title">Power</div>
+            <div class="settings-row">
+              <div class="settings-row-label">Shutdown System</div>
+              <button id="btn-shutdown-system" class="fm-actions">Shutdown</button>
+            </div>
+            <div class="settings-row">
+              <div class="settings-row-label">Restart System</div>
+              <button id="btn-restart-system" class="fm-actions">Restart</button>
+            </div>
+            <div class="settings-row">
+              <div class="settings-row-label">Sleep System</div>
+              <button id="btn-sleep-system" class="fm-actions">Sleep</button>
+            </div>
+          </div>
+          <div class="settings-section">
+            <div class="settings-section-title">Audio</div>
+            <div class="settings-row">
+              <div class="settings-row-label">Volume</div>
+              <input id="volume-level" type="number" value="80" min="0" max="100" style="width:80px">
+              <button id="btn-volume" class="fm-actions">Apply</button>
+            </div>
+          </div>
+        </div>
+
       </div>
 
       <!-- RIGHT PANEL (workspace) -->
@@ -2436,6 +2646,17 @@
       </aside>
 
     </main>
+
+    
+    <div id="page-immersive">
+      <canvas id="immersive-canvas"></canvas>
+      <div class="immersive-hud" id="immersive-hud">
+        <div><b>VYREN</b> immersive</div>
+        <div class="immersive-state" id="immersive-state">IDLE</div>
+      </div>
+      <div class="immersive-error" id="immersive-error"></div>
+    </div>
+
   </div>
 
   <!-- Reconnecting indicator bar -->
@@ -2443,44 +2664,536 @@
 
   <script>
     // ═══════════════════════════════════════════════════════════
-    // NAVIGATION — page switching + sidebar/panel collapse.
-    // This is the only genuinely new interactive logic. Everything
-    // below it (websocket, state machine, chat) is the original,
-    // working implementation, unchanged.
+    // NAVIGATION + ROUTING + WORKSPACE STATE
     // ═══════════════════════════════════════════════════════════
     (function () {
-      const app = document.getElementById('app');
-      const sbItems = document.querySelectorAll('.sb-item');
-      const pages = document.querySelectorAll('.page');
-      const pageTitle = document.getElementById('page-title-tb');
-      const isMobile = () => window.innerWidth < 768;
+      const NAV = new Map([
+        ['chats', 'page-chats'],
+        ['memory', 'page-memory'],
+        ['planner', 'page-planner'],
+        ['files', 'page-files'],
+        ['vision', 'page-vision'],
+        ['browser', 'page-browser'],
+        ['graph', 'page-graph'],
+        ['skills', 'page-skills'],
+        ['logs', 'page-logs'],
+        ['dashboard', 'page-dashboard'],
+        ['developer', 'page-developer'],
+        ['settings', 'page-settings'],
+        ['system', 'page-system'],
+        ['immersive', 'page-immersive'],
+      ]);
 
-      function showPage(name) {
-        pages.forEach(p => p.style.display = (p.id === 'page-' + name) ? (name === 'chats' ? 'grid' : 'block') : 'none');
-        sbItems.forEach(i => i.classList.toggle('active', i.dataset.page === name));
-        const active = document.querySelector('.sb-item.active span');
-        if (active) pageTitle.textContent = active.textContent;
-        if (isMobile()) app.classList.remove('sidebar-open');
+      function pageIdForKey(key) {
+        return NAV.get(String(key || '').toLowerCase()) || '';
       }
 
-      sbItems.forEach(item => {
-        item.addEventListener('click', () => showPage(item.dataset.page));
+      function shutdownVYREN() {
+        if (!confirm('Shutdown VYREN?')) return;
+        window.location.reload();
+      }
+
+      async function systemAction(action) {
+        try {
+          const res = await fetch('/api/system/' + action, { method: 'POST' });
+          const data = await res.json();
+          alert(JSON.stringify(data));
+        } catch (exc) {
+          alert('System action failed: ' + exc.message);
+        }
+      }
+
+      async function volumeAction(level) {
+        try {
+          const res = await fetch('/api/system/volume', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ level }),
+          });
+          const data = await res.json();
+          alert(JSON.stringify(data));
+        } catch (exc) {
+          alert('Volume action failed: ' + exc.message);
+        }
+      }
+
+      function setActivePage(key) {
+        if (key === 'shutdown-vyren') { shutdownVYREN(); return; }
+        if (key === 'shutdown-system') { systemAction('shutdown'); return; }
+        if (key === 'sleep-system') { systemAction('sleep'); return; }
+        if (key === 'increase-volume') { volumeAction(80); return; }
+
+        const target = pageIdForKey(key);
+        if (!target) return;
+
+        document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));
+        const el = document.getElementById(target);
+        if (el) el.classList.add('active');
+
+        document.querySelectorAll('.sb-item').forEach(el => el.classList.remove('active'));
+        const navItem = document.querySelector('.sb-item[data-page="' + (key || 'chats') + '"]');
+        if (navItem) navItem.classList.add('active');
+
+        const title = document.getElementById('page-title-tb');
+        if (title) title.textContent = (navItem && navItem.textContent || 'Chats').trim();
+
+        if (target === 'page-chats') {
+          document.getElementById('main').classList.add('canvas-active');
+          if (window.VyrenEnv && window.VyrenEnv.start) window.VyrenEnv.start();
+          if (window.initImmersive) window.initImmersive();
+        } else {
+          document.getElementById('main').classList.remove('canvas-active');
+          if (window.VyrenEnv && window.VyrenEnv.stop) window.VyrenEnv.stop();
+        }
+
+        if (window.history && window.history.replaceState) {
+          window.history.replaceState({ page: key || 'chats' }, '', '#' + (key || 'chats'));
+        }
+      }
+
+      document.getElementById('sb-nav').addEventListener('click', (e) => {
+        const item = e.target.closest('.sb-item');
+        if (!item) return;
+        const page = item.getAttribute('data-page');
+        if (!page) return;
+        setActivePage(page);
       });
 
-      document.getElementById('sb-collapse-btn').addEventListener('click', () => {
-        if (isMobile()) { app.classList.toggle('sidebar-open'); return; }
-        app.classList.toggle('sidebar-collapsed');
+      window.addEventListener('hashchange', () => {
+        const key = (location.hash || '#chats').replace('#', '') || 'chats';
+        setActivePage(key);
       });
 
-      document.getElementById('right-toggle-btn').addEventListener('click', () => {
-        document.getElementById('main').classList.toggle(isMobile() ? 'right-open' : 'right-collapsed');
+      window.addEventListener('popstate', () => {
+        const key = (location.hash || '#chats').replace('#', '') || 'chats';
+        setActivePage(key);
       });
 
-      document.querySelectorAll('[data-toggle]').forEach(t => {
-        t.addEventListener('click', () => t.classList.toggle('on'));
-      });
+      const initPage = (location.hash || '#chats').replace('#', '') || 'chats';
+      setActivePage(initPage);
+    })();
+  </script>
 
-      showPage('chats');
+  <script>
+    // ── SYSTEM BUTTONS ──
+    (function () {
+      const $ = (id) => document.getElementById(id);
+      if ($('btn-shutdown-vyren')) {
+        $('btn-shutdown-vyren').addEventListener('click', () => {
+          if (!confirm('Shutdown VYREN?')) return;
+          window.location.reload();
+        });
+      }
+      if ($('btn-shutdown-system')) {
+        $('btn-shutdown-system').addEventListener('click', () => fetch('/api/system/shutdown', { method: 'POST' }).then(r => r.json()).then(data => alert(JSON.stringify(data))).catch(e => alert('System action failed: ' + e.message)));
+      }
+      if ($('btn-restart-system')) {
+        $('btn-restart-system').addEventListener('click', () => fetch('/api/system/restart', { method: 'POST' }).then(r => r.json()).then(data => alert(JSON.stringify(data))).catch(e => alert('System action failed: ' + e.message)));
+      }
+      if ($('btn-sleep-system')) {
+        $('btn-sleep-system').addEventListener('click', () => fetch('/api/system/sleep', { method: 'POST' }).then(r => r.json()).then(data => alert(JSON.stringify(data))).catch(e => alert('System action failed: ' + e.message)));
+      }
+      if ($('btn-volume')) {
+        $('btn-volume').addEventListener('click', () => {
+          const level = parseInt(($('volume-level') && $('volume-level').value) || '80', 10);
+          fetch('/api/system/volume', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ level }),
+          }).then(r => r.json()).then(data => alert(JSON.stringify(data))).catch(e => alert('Volume action failed: ' + e.message));
+        });
+      }
+    })();
+  </script>
+
+  <script>
+    // ── BROWSER ACTIONS ──
+    (function () {
+      const $ = (id) => document.getElementById(id);
+      const statusEl = $('browser-status');
+      const contentEl = $('browser-content');
+      function setStatus(text) { if (statusEl) statusEl.textContent = text; }
+      function setContent(text) { if (contentEl) contentEl.textContent = text; }
+      async function browserAction(action, payload = {}) {
+        try {
+          setStatus('Running: ' + action);
+          const res = await fetch('/api/browser/action', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action, ...payload }),
+          });
+          const data = await res.json();
+          if (data.status === 'success') {
+            setStatus('Done: ' + action);
+            if (data.result && typeof data.result === 'string') setContent(data.result);
+            else setContent(JSON.stringify(data.result || data, null, 2));
+          } else {
+            setStatus('Error: ' + (data.error || action));
+            setContent(JSON.stringify(data, null, 2));
+          }
+        } catch (e) {
+          setStatus('Request failed: ' + e.message);
+        }
+      }
+      if ($('browser-open-btn')) {
+        $('browser-open-btn').addEventListener('click', () => {
+          const url = ($('url-input') && $('url-input').value.trim()) || 'https://example.com';
+          browserAction('open', { url });
+        });
+      }
+      if ($('browser-capture-btn')) {
+        $('browser-capture-btn').addEventListener('click', () => browserAction('screenshot'));
+      }
+      if ($('browser-text-btn')) {
+        $('browser-text-btn').addEventListener('click', () => browserAction('extract_text'));
+      }
+      if ($('browser-links-btn')) {
+        $('browser-links-btn').addEventListener('click', () => browserAction('extract_links'));
+      }
+      if ($('browser-fill-btn')) {
+        $('browser-fill-btn').addEventListener('click', () => {
+          const fields = { 'input[name="q"]': 'Hello world' };
+          browserAction('fill_form', { fields });
+        });
+      }
+      if ($('browser-search-btn')) {
+        $('browser-search-btn').addEventListener('click', () => {
+          const query = ($('url-input') && $('url-input').value.trim()) || 'test';
+          browserAction('search', { query, engine: 'google' });
+        });
+      }
+      if ($('browser-save-screenshot-btn')) {
+        $('browser-save-screenshot-btn').addEventListener('click', () => browserAction('save_screenshot'));
+      }
+      const urlInput = $('url-input');
+      if (urlInput) {
+        urlInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' && $('browser-open-btn')) $('browser-open-btn').click();
+        });
+      }
+    })();
+  </script>
+    window.VyrenEnv = (() => {
+      const mainCanvas = document.getElementById('main-canvas');
+      let renderer = null;
+      let scene = null;
+      let camera = null;
+      let envRunning = false;
+      let animId = null;
+      let currentMode = 'orb';
+      let graphData = { nodes: [], edges: [] };
+
+      function makeOrb() {
+        const group = new THREE.Group();
+        const coreGeo = new THREE.SphereGeometry(1, 48, 48);
+        const coreMat = new THREE.MeshPhysicalMaterial({
+          roughness: 0.25,
+          metalness: 0.05,
+          clearcoat: 0.4,
+          clearcoatRoughness: 0.2,
+          color: new THREE.Color('#14142a'),
+          emissive: new THREE.Color('#1f1b4d'),
+          emissiveIntensity: 0.4,
+          transparent: true,
+          opacity: 0.95
+        });
+        group.add(new THREE.Mesh(coreGeo, coreMat));
+
+        const shellGeo = new THREE.SphereGeometry(1.18, 64, 64);
+        const shellMat = new THREE.MeshPhysicalMaterial({
+          roughness: 0.1,
+          metalness: 0,
+          clearcoat: 0.8,
+          color: new THREE.Color('#7c6cff'),
+          emissive: new THREE.Color('#7c6cff'),
+          emissiveIntensity: 0.12,
+          transparent: true,
+          opacity: 0.12,
+          side: THREE.FrontSide
+        });
+        group.add(new THREE.Mesh(shellGeo, shellMat));
+
+        group.add(new THREE.Mesh(
+          new THREE.SphereGeometry(1.35, 48, 48),
+          new THREE.MeshBasicMaterial({ color: new THREE.Color('#7c6cff'), transparent: true, opacity: 0.08 })
+        ));
+
+        const ring = new THREE.Mesh(
+          new THREE.TorusGeometry(1.55, 0.015, 24, 220),
+          new THREE.MeshBasicMaterial({ color: new THREE.Color('#7c6cff'), transparent: true, opacity: 0.35 })
+        );
+        ring.rotation.x = Math.PI * 0.42;
+        group.add(ring);
+
+        const ring2 = new THREE.Mesh(
+          new THREE.TorusGeometry(1.7, 0.01, 24, 260),
+          new THREE.MeshBasicMaterial({ color: new THREE.Color('#00d4ff'), transparent: true, opacity: 0.18 })
+        );
+        ring2.rotation.x = -Math.PI * 0.35;
+        ring2.rotation.y = Math.PI * 0.2;
+        group.add(ring2);
+
+        const pGeo = new THREE.BufferGeometry();
+        const count = 140;
+        const pos = new Float32Array(count * 3);
+        for (let i = 0; i < count; i++) {
+          const r = 1.05 + Math.random() * 0.5;
+          const theta = Math.random() * Math.PI * 2;
+          const phi = Math.acos(2 * Math.random() - 1);
+          pos[i*3] = r * Math.sin(phi) * Math.cos(theta);
+          pos[i*3+1] = r * Math.sin(phi) * Math.sin(theta);
+          pos[i*3+2] = r * Math.cos(phi);
+        }
+        pGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        group.add(new THREE.Points(pGeo, new THREE.PointsMaterial({ color: new THREE.Color('#b8aaff'), size: 0.025, transparent: true, opacity: 0.55 })));
+
+        group.userData = { speedTarget: 0.3 };
+        return group;
+      }
+
+      function makeGraph(nodes, edges) {
+        const group = new THREE.Group();
+        const nodeRadius = nodes && nodes.length ? Math.min(0.35, 12 / Math.max(1, nodes.length)) : 0.22;
+        const R = 2.6;
+        const edgeMat = new THREE.LineBasicMaterial({ color: new THREE.Color('#ffffff'), transparent: true, opacity: 0.18 });
+        const drawn = new Set();
+        if (Array.isArray(edges)) {
+          for (const e of edges.slice(0, 250)) {
+            const s = String(e.source || e.from || e.src || '').trim();
+            const t = String(e.target || e.to || e.dst || '').trim();
+            if (!s || !t || s === t) continue;
+            const key = s + '->' + t;
+            if (drawn.has(key)) continue;
+            drawn.add(key);
+            group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0.1,0,0)]), edgeMat));
+          }
+        }
+        const placed = new Map();
+        const all = Array.from(new Set((nodes || []).map(n => String(n.label || n.id || n).replace(/</g,'&lt;').replace(/>/g,'&gt;')).filter(Boolean)));
+        const limit = Math.min(all.length, 60);
+        const placedGroup = new THREE.Group();
+        group.add(placedGroup);
+        for (let i = 0; i < limit; i++) {
+          const label = all[i];
+          const angle = (i / limit) * Math.PI * 2;
+          const rr = R + (Math.random() - 0.5) * 0.6;
+          const x = Math.cos(angle) * rr;
+          const y = (Math.random() - 0.5) * 1.6;
+          const z = Math.sin(angle) * rr;
+          placed.set(label, new THREE.Vector3(x, y, z));
+          const mesh = new THREE.Mesh(new THREE.SphereGeometry(nodeRadius, 24, 24), new THREE.MeshBasicMaterial({ color: new THREE.Color('#eaeaea'), transparent: true, opacity: 0.85 }));
+          mesh.position.set(x, y, z);
+          placedGroup.add(mesh);
+        }
+        placedGroup.add(new THREE.Mesh(new THREE.SphereGeometry(nodeRadius * 1.4, 32, 32), new THREE.MeshBasicMaterial({ color: new THREE.Color('#b8aaff'), transparent: true, opacity: 0.95 })));
+        if (Array.isArray(edges)) {
+          for (const e of edges.slice(0, 250)) {
+            const s = String(e.source || e.from || e.src || '').trim();
+            const t = String(e.target || e.to || e.dst || '').trim();
+            const key = s + '->' + t;
+            if (!s || !t || s === t || !drawn.has(key)) continue;
+            const a = placed.get(s) || new THREE.Vector3(0,0,0);
+            const b = placed.get(t) || new THREE.Vector3(0,0,0);
+            const c = (a.distanceTo(new THREE.Vector3(0,0,0)) < 0.05) ? b : a;
+            const d = (b.distanceTo(new THREE.Vector3(0,0,0)) < 0.05) ? a : b;
+            placedGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([c, d]), edgeMat));
+          }
+        }
+        return group;
+      }
+
+      function setState(state) {
+        if (!scene) return;
+        const orb = scene.getObjectByName('vyren-orb');
+        if (!orb) return;
+        const cfg = {
+          IDLE: { color: '#7c6cff', intensity: 0.35, speed: 0.3 },
+          LISTENING: { color: '#00d4ff', intensity: 0.75, speed: 0.8 },
+          SPEAKING: { color: '#ffaa00', intensity: 0.7, speed: 0.6 },
+          THINKING: { color: '#ffaa00', intensity: 0.5, speed: 0.45 },
+          EXECUTING: { color: '#00ff88', intensity: 0.8, speed: 0.9 },
+          INTERRUPTED: { color: '#ff4466', intensity: 0.9, speed: 1.2 },
+          ERROR: { color: '#ff4466', intensity: 0.5, speed: 0.2 },
+          OFFLINE: { color: '#3a3a4a', intensity: 0.15, speed: 0.15 }
+        }[state] || { color: '#7c6cff', intensity: 0.35, speed: 0.3 };
+        orb.children.forEach(child => {
+          if (child.material && child.material.emissive) {
+            child.material.emissive.set(cfg.color);
+            child.material.emissiveIntensity = cfg.intensity;
+          }
+          if (child.material && child.material.color && child.type === 'MeshBasicMaterial') {
+            child.material.color.set(cfg.color);
+          }
+        });
+        orb.userData.speedTarget = cfg.speed;
+      }
+
+      function start() {
+        if (envRunning) return;
+        envRunning = true;
+        if (!renderer) {
+          renderer = new THREE.WebGLRenderer({ canvas: mainCanvas, antialias: true, alpha: true });
+          renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+          renderer.setSize(mainCanvas.clientWidth || mainCanvas.width || 1, mainCanvas.clientHeight || mainCanvas.height || 1);
+          renderer.toneMapping = THREE.ACESFilmicToneMapping;
+          renderer.toneMappingExposure = 1.1;
+          scene = new THREE.Scene();
+          camera = new THREE.PerspectiveCamera(46, (mainCanvas.clientWidth || 1) / (mainCanvas.clientHeight || 1), 0.1, 60);
+          camera.position.set(0, 0.1, 4.4);
+          camera.lookAt(0, 0, 0);
+          scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+          const dir = new THREE.DirectionalLight(0xffffff, 0.35);
+          dir.position.set(2, 3, 3);
+          scene.add(dir);
+
+          const orb = makeOrb();
+          orb.name = 'vyren-orb';
+          scene.add(orb);
+
+          const bg = new THREE.Group();
+          bg.name = 'starfield';
+          for (let i = 0; i < 700; i++) {
+            const mesh = new THREE.Mesh(
+              new THREE.SphereGeometry(0.005 + Math.random() * 0.018, 8, 8),
+              new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffffff'), transparent: true, opacity: 0.35 + Math.random() * 0.55 })
+            );
+            mesh.position.set((Math.random() - 0.5) * 22, (Math.random() - 0.5) * 14, -6 - Math.random() * 8);
+            bg.add(mesh);
+          }
+          scene.add(bg);
+        }
+        document.getElementById('main').classList.add('canvas-active');
+        const resize = () => {
+          const w = mainCanvas.clientWidth || 1;
+          const h = mainCanvas.clientHeight || 1;
+          renderer.setSize(w, h, false);
+          camera.aspect = w / Math.max(h, 1);
+          camera.updateProjectionMatrix();
+        };
+        window.addEventListener('resize', resize);
+        let time = 0;
+        (function loop() {
+          animId = requestAnimationFrame(loop);
+          time += 0.016;
+          const orb = scene.getObjectByName('vyren-orb');
+          if (orb) {
+            const sp = orb.userData.speedTarget || 0.3;
+            orb.rotation.y += 0.004 * sp;
+            let ring = null, ring2 = null;
+            orb.children.forEach(child => {
+              if (child.geometry && child.geometry.type === 'TorusGeometry') {
+                if (!ring) ring = child; else ring2 = child;
+              }
+            });
+            if (ring) { ring.rotation.z += 0.0025 * sp; ring.rotation.x += 0.0018 * sp; }
+            if (ring2) { ring2.rotation.z -= 0.002 * sp; ring2.rotation.x -= 0.0015 * sp; }
+            orb.position.y = Math.sin(time * 0.7) * 0.05;
+          }
+          const bg = scene.getObjectByName('starfield');
+          if (bg) bg.rotation.y += 0.00015;
+          renderer.render(scene, camera);
+        })();
+        setState('IDLE');
+      }
+
+      function stop() {
+        envRunning = false;
+        document.getElementById('main').classList.remove('canvas-active');
+        if (animId) { cancelAnimationFrame(animId); animId = null; }
+        if (renderer) { try { renderer.dispose(); } catch (e) { /* noop */ } renderer = null; }
+        scene = null; camera = null;
+      }
+
+      function setMode(mode) {
+        currentMode = mode;
+        if (!scene) return;
+        const existing = scene.getObjectByName('env-mode');
+        if (existing) scene.remove(existing);
+        if (mode === 'memory') scene.add(makeGraph(graphData.nodes, graphData.edges).setName && makeGraph(graphData.nodes, graphData.edges));
+        if (mode === 'system') {
+          const g = new THREE.Group(); g.name = 'env-mode';
+          const pts = [];
+          for (let i = 0; i < 70; i++) pts.push(new THREE.Vector3((Math.random()-0.5)*4, (Math.random()-0.5)*3, -1 - Math.random()*2));
+          const geo = new THREE.BufferGeometry().setFromPoints(pts);
+          g.add(new THREE.Points(geo, new THREE.PointsMaterial({ color: new THREE.Color('#00ff88'), size: 0.025, transparent: true, opacity: 0.55 })));
+          scene.add(g);
+        }
+        if (mode === 'vision') {
+          const g = new THREE.Group(); g.name = 'env-mode';
+          g.add(new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.4), new THREE.MeshBasicMaterial({ color: new THREE.Color('#00d4ff'), transparent: true, opacity: 0.08, side: THREE.DoubleSide })));
+          scene.add(g);
+        }
+        if (mode === 'activity') {
+          const g = new THREE.Group(); g.name = 'env-mode';
+          for (let i = 0; i < 35; i++) {
+            const geo = new THREE.TorusGeometry(0.35 + Math.random() * 0.7, 0.012, 12, 80);
+            const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffaa00'), transparent: true, opacity: 0.25 }));
+            mesh.rotation.set(Math.random()*3, Math.random()*3, Math.random()*3);
+            g.add(mesh);
+          }
+          scene.add(g);
+        }
+      }
+
+      function setGraphData(data) {
+        graphData = data || { nodes: [], edges: [] };
+        if (currentMode === 'memory') setMode('memory');
+      }
+
+      async function loadMemoryGraph() {
+        try {
+          const res = await fetch('/api/obsidian');
+          const data = await res.json();
+          const nodes = [];
+          const edges = [];
+          if (Array.isArray(data.entities)) for (const e of data.entities) nodes.push({ id: String(e.name || e.id || 'node'), label: String(e.name || e.id || 'node'), type: String(e.type || 'memory') });
+          if (Array.isArray(data.relations)) for (const r of data.relations) edges.push({ source: String(r.source || r.from || ''), target: String(r.target || r.to || '') });
+          if (!nodes.length) {
+            setGraphData({ nodes: [
+              { id: 'VYREN', label: 'VYREN', type: 'project' },
+              { id: 'Gemini Live', label: 'Gemini Live', type: 'tool' },
+              { id: 'Memory', label: 'Memory', type: 'system' },
+              { id: 'NOVA', label: 'NOVA', type: 'project' },
+              { id: 'Obsidian', label: 'Obsidian', type: 'tool' }
+            ], edges: [
+              { source: 'VYREN', target: 'Gemini Live' },
+              { source: 'VYREN', target: 'Memory' },
+              { source: 'VYREN', target: 'NOVA' },
+              { source: 'NOVA', target: 'Obsidian' }
+            ]});
+            return;
+          }
+          setGraphData({ nodes, edges });
+        } catch (e) {
+          setGraphData({ nodes: [{ id: 'VYREN', label: 'VYREN', type: 'project' }], edges: [] });
+        }
+      }
+
+      function interrupt() {
+        setState('INTERRUPTED');
+        setTimeout(() => setState('IDLE'), 1400);
+      }
+
+      async function selfImprove(query) {
+        const q = String(query || 'improve current interface').trim();
+        setState('THINKING');
+        await new Promise(r => setTimeout(r, 250));
+        try {
+          const res = await fetch('/api/agent/tool', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tool: 'self_improve', args: { query: q } })
+          });
+          const data = await res.json();
+          return data;
+        } catch (e) {
+          return { ok: false, error: String(e) };
+        } finally {
+          setState('IDLE');
+        }
+      }
+
+      return { start, stop, setState, setMode, setGraphData, loadMemoryGraph, interrupt, selfImprove };
     })();
   </script>
 
@@ -2537,7 +3250,7 @@
       DISCONNECTED: { color: 'var(--red)', dotClass: 'bad', label: 'Disconnected', orbText: '!', badge: 'disconnected', waveform: false }
     };
 
-    function setState(state) {
+    function setChatState(state) {
       const cfg = stateConfig[state] || stateConfig.IDLE;
       currentState = state;
 
@@ -2556,6 +3269,12 @@
       }
     }
 
+    window.setImmersiveState = function(state) {
+      try { if (window.VyrenEnv && window.VyrenEnv.setState) window.VyrenEnv.setState(state); } catch (e) { /* noop */ }
+    };
+
+    const setState = setChatState;
+
     // ── WEBSOCKET (original, unchanged) ──
     function connect() {
       if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
@@ -2565,14 +3284,14 @@
 
       ws.onopen = () => {
         reconnectBar.style.display = 'none';
-        setState('IDLE');
+        setChatState('IDLE');
         addLogMsg('system', 'Connected to VYREN.');
         startMetricsPoll();
       };
 
       ws.onclose = () => {
         reconnectBar.style.display = '';
-        setState('DISCONNECTED');
+        setChatState('DISCONNECTED');
         scheduleReconnect();
         stopMetricsPoll();
       };
@@ -2595,16 +3314,20 @@
       switch (data.type) {
         case 'state':
           if (data.state && stateConfig[data.state.toUpperCase()]) setState(data.state.toUpperCase());
+          if (window.setImmersiveState) window.setImmersiveState(data.state || currentState);
           break;
         case 'user_transcript':
           addLogMsg('user', data.text);
+          if (window.setImmersiveState) window.setImmersiveState('LISTENING');
           break;
         case 'chunk':
           setState('SPEAKING');
           appendToLastVyren(data.text);
+          if (window.setImmersiveState) window.setImmersiveState('SPEAKING');
           break;
         case 'tool_call':
           addLogMsg('tool', `Tool: ${data.name}`);
+          if (window.setImmersiveState) window.setImmersiveState('THINKING');
           break;
         case 'tool_result':
           addLogMsg('system', `${data.name}: ${data.result}`);
@@ -2620,6 +3343,7 @@
           sendBtn.disabled = !msgInput.value.trim();
           removeTypingIndicator();
           if (currentState === 'SPEAKING' || currentState === 'THINKING') setState('IDLE');
+          if (window.setImmersiveState) window.setImmersiveState('IDLE');
           lastVyrenEl = null;
           vyrenTextBuffer = '';
           break;
@@ -2629,6 +3353,7 @@
           sendBtn.disabled = !msgInput.value.trim();
           removeTypingIndicator();
           if (currentState === 'SPEAKING' || currentState === 'THINKING') setState('IDLE');
+          if (window.setImmersiveState) window.setImmersiveState('IDLE');
           lastVyrenEl = null;
           vyrenTextBuffer = '';
           break;
@@ -2821,11 +3546,24 @@
         setState('MUTED');
         if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'mute', muted: true }));
       } else {
-        setState('IDLE');
+        setChatState('IDLE');
         if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'mute', muted: false }));
       }
     }
     muteBtn.addEventListener('click', toggleMute);
+
+    // ── INTERRUPT / BARGE-IN ──
+    const interruptBtn = document.getElementById('interrupt-btn');
+    if (interruptBtn) {
+      interruptBtn.addEventListener('click', () => {
+        if (ws && ws.readyState === 1) {
+          ws.send(JSON.stringify({ type: 'interrupt' }));
+        }
+        if (window.VyrenEnv && window.VyrenEnv.interrupt) window.VyrenEnv.interrupt();
+        setState('INTERRUPTED');
+        setTimeout(() => setState('IDLE'), 1200);
+      });
+    }
 
     // ── FULLSCREEN (original, unchanged) ──
     function toggleFullscreen() {
@@ -2842,17 +3580,547 @@
       }
       if (e.key === 'F4' || (e.key === 'm' || e.key === 'M')) { e.preventDefault(); toggleMute(); }
       if (e.key === 'F11') { e.preventDefault(); toggleFullscreen(); }
+      if (e.key === 'i' || e.key === 'I') {
+        const immersivePage = document.getElementById('page-immersive');
+        if (immersivePage) immersivePage.classList.toggle('active');
+      }
       if (e.key === 'Escape' && document.fullscreenElement) document.exitFullscreen().catch(() => { });
     });
+
+    // ── SELF-IMPROVEMENT ──
+    const selfImproveBtn = document.getElementById('self-improve-btn');
+    const selfImproveInput = document.getElementById('self-improve-input');
+    const selfImproveOutput = document.getElementById('self-improve-output');
+    if (selfImproveBtn && selfImproveInput) {
+      selfImproveBtn.addEventListener('click', async () => {
+        const q = selfImproveInput.value.trim();
+        if (!q) return;
+        selfImproveOutput.textContent = 'Queued: ' + q;
+        try {
+          const r = await fetch('/api/self-improve', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: q }),
+          });
+          const data = await r.json();
+          selfImproveOutput.textContent = JSON.stringify(data, null, 2);
+        } catch (exc) {
+          selfImproveOutput.textContent = 'Self-improve failed: ' + exc.message;
+        }
+      });
+      if (selfImproveInput) {
+        selfImproveInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') selfImproveBtn.click();
+        });
+      }
+    }
 
     // ── SERVICE WORKER (original, unchanged) ──
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(() => { });
     }
 
+    // ── URL / BROWSER PAGE ──
+    async function ingestUrl() {
+      const input = document.getElementById('url-input');
+      const status = document.getElementById('url-status');
+      const content = document.getElementById('url-content');
+      const graphEl = document.getElementById('url-graph');
+      const url = (input && input.value || '').trim();
+      if (!url) {
+        if (status) status.textContent = 'Enter a URL first.';
+        return;
+      }
+      if (status) status.textContent = 'Ingesting...';
+      try {
+        const r = await fetch('/api/url/ingest', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url })
+        });
+        const data = await r.json();
+        if (content) {
+          content.textContent = JSON.stringify(data, null, 2);
+        }
+        if (graphEl) {
+          graphEl.textContent = 'Graph updated. Open the Graph page to visualize.';
+        }
+        if (status) status.textContent = `Ingested: ${data.status || 'done'}`;
+      if (content) {
+        const safe = JSON.stringify(data, null, 2);
+        content.textContent = safe;
+        if (data.images && data.images.length) {
+          const imgs = data.images.slice(0, 6).map(src => `<img src="${src}" style="max-height:120px;border-radius:8px;border:1px solid var(--border);margin:4px">`).join('');
+          content.innerHTML = `<div style="margin-bottom:8px">${imgs}</div><pre style="white-space:pre-wrap;font-size:12px;color:var(--txt-m)">${esc(safe)}</pre>`;
+        }
+      }
+      } catch (exc) {
+        if (status) status.textContent = 'Ingest failed: ' + exc.message;
+      }
+    }
+
+    function openUrl() {
+      const input = document.getElementById('url-input');
+      const url = (input && input.value || '').trim();
+      if (!url) return;
+      window.open(url, '_blank');
+    }
+
+    const urlIngestBtn = document.getElementById('url-ingest-btn');
+    const urlOpenBtn = document.getElementById('url-open-btn');
+    if (urlIngestBtn) urlIngestBtn.addEventListener('click', ingestUrl);
+    if (urlOpenBtn) urlOpenBtn.addEventListener('click', openUrl);
+
+    // URL page helpers: media preview + graph refresh after ingest
+    async function refreshUrlGraph() {
+      const graphEl = document.getElementById('url-graph');
+      if (!graphEl) return;
+      try {
+        const res = await fetch('/api/graph');
+        const data = await res.json();
+        const websites = (data.nodes || []).filter(n => n.type === 'website' || (n.properties && n.properties.url));
+        graphEl.innerHTML = websites.slice(0, 20).map(n => `<div><a href="${n.properties.url || n.label}" target="_blank">${n.label}</a></div>`).join('') || '<div style="color:var(--txt-m)">No URL nodes yet.</div>';
+      } catch (exc) {
+        graphEl.textContent = 'Graph refresh failed.';
+      }
+    }
+
+    const origIngestUrl = ingestUrl;
+    window.ingestUrl = async function() {
+      await origIngestUrl();
+      await refreshUrlGraph();
+    };
+
+    const urlInput = document.getElementById('url-input');
+    if (urlInput) {
+      urlInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') window.ingestUrl();
+      });
+    }
+
+    // ── GRAPH PAGE ──
+    (function initGraphPage() {
+      const container = document.getElementById('graph-canvas');
+      if (!container || typeof vis === 'undefined') return;
+
+      async function loadGraph(source) {
+        const res = await fetch(source || '/api/graph');
+        const data = await res.json();
+        renderGraph(data);
+        if (window.updateGraphNodes) window.updateGraphNodes('');
+      }
+
+      function renderGraph(data) {
+        const nodes = new vis.DataSet((data.nodes || []).map(n => ({
+          id: n.id,
+          label: n.label,
+          title: n.type,
+          group: n.type,
+          value: n.importance || 1
+        })));
+
+        const edges = new vis.DataSet((data.links || []).map(l => ({
+          from: l.source,
+          to: l.target,
+          label: l.relation
+        })));
+
+        if (!window.__vyrenGraph) {
+          window.__vyrenGraph = new vis.Network(container, { nodes, edges }, {
+            physics: { stabilization: true },
+            interaction: { hover: true }
+          });
+
+          window.__vyrenGraph.on('click', (params) => {
+            if (!params.nodes.length) return;
+            const nodeId = params.nodes[0];
+            const node = (data.nodes || []).find(n => n.id === nodeId);
+            const sel = document.getElementById('graph-selection');
+            if (!node || !sel) return;
+            const props = Object.entries(node.properties || {})
+              .filter(([, v]) => v)
+              .map(([k, v]) => `${k}: ${v}`)
+              .join('<br>');
+            sel.innerHTML = `<b>${node.label}</b><br><span style="color:var(--txt-m)">${node.type}</span><br><br>${props ? props : ''}`;
+          });
+        } else {
+          window.__vyrenGraph.setData({ nodes, edges });
+        }
+
+        const statsEl = document.getElementById('graph-stats');
+        if (statsEl && data.stats) {
+          statsEl.innerHTML = `
+            <div><b>${data.stats.entities}</b> entities</div>
+            <div><b>${data.stats.edges}</b> edges</div>
+            <div>${Object.entries(data.stats.types || {}).map(([k, v]) => `<span class="pill">${k}: ${v}</span>`).join(' ')}</div>
+          `;
+        }
+      }
+
+      const searchInput = document.getElementById('graph-search');
+      if (searchInput) {
+        searchInput.addEventListener('keydown', async (e) => {
+          if (e.key !== 'Enter') return;
+          const q = searchInput.value.trim();
+          if (!q || !window.__vyrenGraph) return;
+          const res = await fetch(`/api/graph/search?q=${encodeURIComponent(q)}&limit=20`);
+          const data = await res.json();
+          const first = (data.results || [])[0];
+          if (first) {
+            window.__vyrenGraph.selectNodes([first.id]);
+            window.__vyrenGraph.focus(first.id, { scale: 1.5 });
+          }
+        });
+      }
+
+      const refreshBtn = document.getElementById('graph-refresh');
+      if (refreshBtn) {
+        refreshBtn.addEventListener('click', () => loadGraph('/api/graph'));
+      }
+
+      fetch('/api/obsidian')
+        .then(r => r.json())
+        .then(data => {
+          if ((data.nodes || []).length) {
+            renderGraph(data);
+            return;
+          }
+          loadGraph();
+        })
+        .catch(() => loadGraph());
+    })();
+
     // ── INIT ──
     setState('INITIALIZING');
     connect();
+
+    // ── IMMERSIVE 3D ENGINE ──
+    let immersiveReady = false;
+    let immersiveState = 'IDLE';
+
+    window.setImmersiveState = function(state) {
+      immersiveState = state || 'IDLE';
+      const hud = document.getElementById('immersive-state');
+      if (hud) hud.textContent = immersiveState.toUpperCase();
+      if (window.updateOrbVisualState) window.updateOrbVisualState(immersiveState);
+    };
+
+    window.initImmersive = function() {
+      if (immersiveReady || typeof THREE === 'undefined') return;
+      try {
+        const page = document.getElementById('page-immersive');
+        const canvas = document.getElementById('immersive-canvas');
+        if (!page || !canvas) return;
+
+        const measure = () => {
+          const r = canvas.getBoundingClientRect();
+          return { w: r.width || window.innerWidth || window.innerWidth, h: r.height || window.innerHeight || window.innerHeight };
+        };
+        const size = measure();
+
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setSize(size.w, size.h, false);
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x05050a);
+        scene.fog = new THREE.Fog(0x05050a, 8, 30);
+
+        const camera = new THREE.PerspectiveCamera(50, size.w / Math.max(size.h, 1), 0.1, 200);
+        camera.position.z = 6;
+
+        const ambient = new THREE.AmbientLight(0x8090a0, 0.9);
+        scene.add(ambient);
+        const point = new THREE.PointLight(0x7c6cff, 1.1, 40);
+        point.position.set(4, 3, 6);
+        scene.add(point);
+
+        const starsGeo = new THREE.BufferGeometry();
+        const starsCount = 800;
+        const starsPos = new Float32Array(starsCount * 3);
+        for (let i = 0; i < starsCount; i++) {
+          const r = 14 + Math.random() * 20;
+          const theta = Math.random() * Math.PI * 2;
+          const phi = Math.acos(2 * Math.random() - 1);
+          starsPos[i*3+0] = r * Math.sin(phi) * Math.cos(theta);
+          starsPos[i*3+1] = r * Math.sin(phi) * Math.sin(theta);
+          starsPos[i*3+2] = r * Math.cos(phi);
+        }
+        starsGeo.setAttribute('position', new THREE.BufferAttribute(starsPos, 3));
+        const starsMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.02, transparent: true, opacity: 0.6 });
+        const stars = new THREE.Points(starsGeo, starsMat);
+        scene.add(stars);
+
+        const coreGeo = new THREE.SphereGeometry(1.05, 64, 64);
+        const coreMat = new THREE.MeshPhysicalMaterial({
+          color: 0x181826,
+          emissive: 0x04040b,
+          roughness: 0.18,
+          metalness: 0.12,
+          clearcoat: 0.6,
+          clearcoatRoughness: 0.15,
+        });
+        const core = new THREE.Mesh(coreGeo, coreMat);
+        scene.add(core);
+
+        const shellGeo = new THREE.SphereGeometry(1.22, 64, 64);
+        const shellMat = new THREE.MeshPhysicalMaterial({
+          color: 0x000000,
+          emissive: 0x000000,
+          roughness: 0.05,
+          metalness: 0.0,
+          transmission: 0.55,
+          thickness: 0.25,
+          transparent: true,
+          opacity: 0.22,
+        });
+        const shell = new THREE.Mesh(shellGeo, shellMat);
+        scene.add(shell);
+
+        const ringGeo = new THREE.TorusGeometry(1.65, 0.02, 16, 120);
+        const ringMat = new THREE.MeshBasicMaterial({ color: 0x00d4ff, transparent: true, opacity: 0.25 });
+        const ring = new THREE.Mesh(ringGeo, ringMat);
+        ring.rotation.x = 1.15;
+        ring.rotation.y = 0.45;
+        scene.add(ring);
+
+        const ring2Geo = new THREE.TorusGeometry(1.9, 0.015, 16, 140);
+        const ring2Mat = new THREE.MeshBasicMaterial({ color: 0x7c6cff, transparent: true, opacity: 0.18 });
+        const ring2 = new THREE.Mesh(ring2Geo, ring2Mat);
+        ring2.rotation.x = -0.6;
+        ring2.rotation.y = 0.9;
+        scene.add(ring2);
+
+        window.updateOrbVisualState = function(state) {
+          const s = (state || 'IDLE').toLowerCase();
+          if (s === 'listening') {
+            coreMat.emissive.setHex(0x001418);
+            shellMat.opacity = 0.28;
+            point.color.setHex(0x00ff88);
+            point.intensity = 1.4;
+          } else if (s === 'thinking') {
+            coreMat.emissive.setHex(0x1a0f28);
+            shellMat.opacity = 0.32;
+            point.color.setHex(0x7c6cff);
+            point.intensity = 1.8;
+          } else if (s === 'speaking') {
+            coreMat.emissive.setHex(0x051018);
+            shellMat.opacity = 0.35;
+            point.color.setHex(0x00d4ff);
+            point.intensity = 1.6;
+          } else {
+            coreMat.emissive.setHex(0x04040b);
+            shellMat.opacity = 0.22;
+            point.color.setHex(0x7c6cff);
+            point.intensity = 1.1;
+          }
+        };
+
+        scene.userData = { camera, renderer, orbitSpeed: 0.003 };
+
+        let graphNodesGroup = new THREE.Group();
+        scene.add(graphNodesGroup);
+
+        window.updateGraphNodes = async function(query) {
+          try {
+            const res = await fetch('/api/graph?q=' + encodeURIComponent(query || ''));
+            const data = await res.json();
+            while (graphNodesGroup.children.length) graphNodesGroup.remove(graphNodesGroup.children[0]);
+            const nodes = data.nodes || [];
+            const links = data.links || [];
+            const positions = new Map();
+            const sphere = new THREE.SphereGeometry(0.06, 16, 16);
+            const mat = new THREE.MeshBasicMaterial({ color: 0x00d4ff });
+            nodes.forEach((n, i) => {
+              const m = new THREE.Mesh(sphere, mat.clone());
+              const phi = Math.acos(-1 + (2 * i) / Math.max(nodes.length, 1));
+              const theta = Math.sqrt(nodes.length * Math.PI) * phi;
+              const r = 2.4 + (n.importance || 1) * 0.3;
+              m.position.setFromSphericalCoords(r, phi, theta);
+              graphNodesGroup.add(m);
+              positions.set(String(n.id), m.position.clone());
+            });
+            const lineMat = new THREE.LineBasicMaterial({ color: 0x7c6cff, transparent: true, opacity: 0.25 });
+            links.forEach(l => {
+              const a = positions.get(String(l.source));
+              const b = positions.get(String(l.target));
+              if (!a || !b) return;
+              const geom = new THREE.BufferGeometry().setFromPoints([a, b]);
+              graphNodesGroup.add(new THREE.Line(geom, lineMat));
+            });
+          } catch (e) {
+            console.warn('graph nodes failed', e);
+          }
+        };
+
+        window.updateGraphNodes('VYREN');
+
+        (function initGraph() {
+          if (!document.getElementById('graph-canvas')) return;
+          const canvas = document.getElementById('graph-canvas');
+          const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+          renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+          const setSize = () => {
+            const w = canvas.clientWidth || window.innerWidth;
+            const h = canvas.clientHeight || window.innerHeight;
+            renderer.setSize(w, h, false);
+            camera.aspect = w / h;
+            camera.updateProjectionMatrix();
+          };
+          setSize();
+          const graphScene = new THREE.Scene();
+          const axes = new THREE.AxesHelper(2);
+          graphScene.add(axes);
+          (function loop() {
+            requestAnimationFrame(loop);
+            renderer.render(graphScene, camera);
+          })();
+        })();
+
+        (function initMouseControls() {
+          const canvas = document.getElementById('immersive-canvas');
+          if (!canvas) return;
+          let dragging = false;
+          let prev = { x: 0, y: 0 };
+          canvas.addEventListener('pointerdown', e => { dragging = true; prev = { x: e.clientX, y: e.clientY }; });
+          canvas.addEventListener('pointermove', e => {
+            if (!dragging) return;
+            const dx = e.clientX - prev.x;
+            const dy = e.clientY - prev.y;
+            core.rotation.y += dx * 0.005;
+            core.rotation.x += dy * 0.005;
+            ring.rotation.z += dx * 0.003;
+            ring2.rotation.z -= dx * 0.002;
+            prev = { x: e.clientX, y: e.clientY };
+          });
+          canvas.addEventListener('pointerup', () => { dragging = false; });
+          canvas.addEventListener('wheel', (e) => {
+            camera.position.z = Math.max(3.2, Math.min(12, camera.position.z + e.deltaY * 0.005));
+          }, { passive: true });
+        })();
+
+        let handMesh = null;
+        let handVisible = false;
+        let handTarget = null;
+
+        function showHandVisualization() {
+          if (handMesh) return;
+          const geo = new THREE.SphereGeometry(0.08, 16, 16);
+          const mat = new THREE.MeshBasicMaterial({ color: 0x00ff88, transparent: true, opacity: 0.9 });
+          handMesh = new THREE.Mesh(geo, mat);
+          scene.add(handMesh);
+        }
+
+        function updateHandVisualization(x, y, z) {
+          if (!handMesh) showHandVisualization();
+          handVisible = true;
+          handMesh.position.set(x || 0, y || 0, z || 0);
+          handMesh.material.opacity = 0.9;
+        }
+
+        function hideHandVisualization() {
+          if (!handMesh) return;
+          handVisible = false;
+          handMesh.material.opacity = 0;
+        }
+
+        async function initHandTracking() {
+          try {
+            if (!('mediaDevices' in navigator && 'getUserMedia' in navigator.mediaDevices)) return;
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 320, height: 240 } });
+            const video = document.createElement('video');
+            video.srcObject = stream;
+            video.play();
+            const handPose = new Hands({ locateFile: (file) => 'https://cdn.jsdelivr.net/npm/@mediapipe/hands/' });
+            handPose.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.6, minTrackingConfidence: 0.6 });
+            handPose.onResults((results) => {
+              if (!document.getElementById('page-immersive').classList.contains('active')) {
+                hideHandVisualization();
+                return;
+              }
+              if (results.multiHandLandmarks && results.multiHandLandmarks.length) {
+                const lm = results.multiHandLandmarks[0];
+                const tip = lm[8];
+                updateHandVisualization((tip.x - 0.5) * -6, (tip.y - 0.5) * 6, -2);
+              } else {
+                hideHandVisualization();
+              }
+            });
+            (async () => {
+              while (true) {
+                await handPose.send({ image: video });
+                await new Promise(r => setTimeout(r, 120));
+              }
+            })();
+          } catch (e) {
+            console.warn('hand tracking unavailable', e);
+          }
+        }
+
+        setTimeout(initHandTracking, 1500);
+
+        window.addEventListener('resize', () => {
+          const canvas = document.getElementById('immersive-canvas');
+          if (!canvas) return;
+          const w = canvas.clientWidth;
+          const h = canvas.clientHeight;
+          camera.aspect = w / h;
+          camera.updateProjectionMatrix();
+          renderer.setSize(w, h, false);
+        });
+
+        function animate() {
+          if (!document.getElementById('page-immersive').classList.contains('active')) {
+            requestAnimationFrame(animate);
+            return;
+          }
+          const t = Date.now() * 0.001;
+          const s = immersiveState || 'IDLE';
+          if (s === 'thinking') {
+            ring.rotation.z += 0.008;
+            ring2.rotation.z -= 0.006;
+            core.scale.setScalar(1 + 0.01 * Math.sin(t * 6));
+          } else if (s === 'speaking') {
+            ring.rotation.z += 0.004;
+            core.scale.setScalar(1 + 0.006 * Math.sin(t * 10));
+          } else if (s === 'listening') {
+            ring.rotation.z += 0.005;
+            core.scale.setScalar(1 + 0.004 * Math.sin(t * 2));
+          } else {
+            ring.rotation.z += 0.002;
+            ring2.rotation.z += 0.0015;
+            core.scale.setScalar(1 + 0.004 * Math.sin(t));
+          }
+          point.position.x = Math.cos(t * 0.7) * 4;
+          point.position.y = Math.sin(t * 0.5) * 2;
+          point.position.z = 5 + Math.sin(t * 0.3);
+          renderer.render(scene, camera);
+          requestAnimationFrame(animate);
+        }
+        animate();
+        immersiveReady = true;
+      } catch (e) {
+        console.warn('Immersive init failed', e);
+      }
+    };
+
+    window.addEventListener('resize', () => {
+      const page = document.getElementById('page-immersive');
+      if (!page || !page.classList.contains('active')) return;
+      initImmersive();
+    });
+
+    // Route immersive key
+    window.addEventListener('keydown', (e) => {
+      const immersivePage = document.getElementById('page-immersive');
+      if (!immersivePage) return;
+      if (e.key.toLowerCase() === 'i' && document.activeElement && document.activeElement.tagName !== 'INPUT') {
+        immersivePage.classList.toggle('active');
+        if (immersivePage.classList.contains('active')) initImmersive();
+      }
+    });
+
   </script>
 </body>
 

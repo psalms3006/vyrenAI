@@ -150,7 +150,7 @@ def register(registry: ToolRegistry):
                 )
             return f"Screen capture failed: {result[len('ERROR:'):] if result.startswith('ERROR:') else 'unknown error'}"
 
-        return f"Screenshot saved to: {save_path}\\nYou can now use analyze_image to look at it."
+        return f"Screenshot saved to: {save_path}\nYou can now use analyze_image to look at it."
 
     def capture_and_analyze(
         question: str = "Describe what is on this screen in detail.",

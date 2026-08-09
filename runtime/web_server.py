@@ -315,6 +315,221 @@ class WebServer:
                 return coord.get_status()
             return {"registered_agents": 0}
 
+        @app.post("/api/self-improve")
+        async def self_improve(payload: dict):
+            try:
+                q = str((payload or {}).get("query") or "improve current interface").strip()
+                ctx.setdefault("self_improve_queue", []).append(q)
+                return {"queued": True, "query": q}
+            except Exception as exc:
+                return {"queued": False, "error": str(exc)}
+
+        @app.get("/api/planner")
+        async def planner_status():
+            try:
+                from vyren.scheduler import TaskManager
+                tm = TaskManager()
+                return tm.list_tasks()
+            except Exception:
+                return {"tasks": []}
+
+        @app.get("/api/logs")
+        async def logs_tail(limit: int = 200):
+            try:
+                log_path = Path(__file__).parent.parent / "logs" / "agent.log"
+                lines = log_path.read_text(encoding="utf-8", errors="ignore").splitlines()[-max(1, min(limit, 1000)):]
+                return {"lines": lines}
+            except Exception:
+                return {"lines": []}
+
+        @app.get("/api/skills")
+        async def skills_status():
+            try:
+                skills_dir = Path(__file__).parent.parent / "skills"
+                found = []
+                if skills_dir.exists():
+                    for p in skills_dir.glob("*/SKILL.md"):
+                        found.append(p.parent.name)
+                return {"skills": found}
+            except Exception:
+                return {"skills": []}
+
+        @app.get("/api/files")
+        async def files_list(path: str = ""):
+            try:
+                from platform_abstraction import get_env
+                env = get_env()
+                base = env.home
+                target = (base / path).resolve()
+                if str(target).startswith(str(base)):
+                    entries = []
+                    for p in target.iterdir():
+                        entries.append({
+                            "name": p.name,
+                            "path": str(p.relative_to(base)),
+                            "is_dir": p.is_dir(),
+                            "size": p.stat().st_size if p.is_file() else None,
+                        })
+                    return {"entries": entries[:200]}
+                return {"entries": []}
+            except Exception:
+                return {"entries": []}
+
+        @app.get("/api/system-folders")
+        async def system_folders():
+            try:
+                from platform_abstraction import (
+                    get_desktop_dir,
+                    get_documents_dir,
+                    get_downloads_dir,
+                    get_pictures_dir,
+                    get_music_dir,
+                    get_videos_dir,
+                )
+                return {
+                    "desktop": str(get_desktop_dir()),
+                    "documents": str(get_documents_dir()),
+                    "downloads": str(get_downloads_dir()),
+                    "pictures": str(get_pictures_dir()),
+                    "music": str(get_music_dir()),
+                    "videos": str(get_videos_dir()),
+                }
+            except Exception:
+                return {
+                    "desktop": str(Path.home() / "Desktop"),
+                    "documents": str(Path.home() / "Documents"),
+                    "downloads": str(Path.home() / "Downloads"),
+                }
+
+        @app.post("/api/system/shutdown")
+        async def system_shutdown(payload: dict):
+            try:
+                from platform_abstraction import shutdown_system
+                delay = int((payload or {}).get("delay", 30))
+                return {"result": shutdown_system(delay)}
+            except Exception as exc:
+                return {"error": str(exc)}
+
+        @app.post("/api/system/restart")
+        async def system_restart(payload: dict):
+            try:
+                from platform_abstraction import restart_system
+                delay = int((payload or {}).get("delay", 30))
+                return {"result": restart_system(delay)}
+            except Exception as exc:
+                return {"error": str(exc)}
+
+        @app.post("/api/system/sleep")
+        async def system_sleep():
+            try:
+                from platform_abstraction import sleep_system
+                return {"result": sleep_system()}
+            except Exception as exc:
+                return {"error": str(exc)}
+
+        @app.post("/api/system/volume")
+        async def system_volume(payload: dict):
+            try:
+                from platform_abstraction import set_system_volume
+                level = int((payload or {}).get("level", 50))
+                return {"result": set_system_volume(level)}
+            except Exception as exc:
+                return {"error": str(exc)}
+
+        @app.post("/api/files/write")
+        async def files_write(payload: dict):
+            try:
+                from platform_abstraction import get_env
+                env = get_env()
+                rel = str((payload or {}).get("path") or "").strip()
+                content = str((payload or {}).get("content") or "")
+                if not rel:
+                    return {"ok": False, "error": "missing path"}
+                target = (env.home / rel).resolve()
+                if str(target).startswith(str(env.home)):
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_text(content, encoding="utf-8")
+                    return {"ok": True, "path": str(target)}
+                return {"ok": False, "error": "path outside home"}
+            except Exception as exc:
+                return {"ok": False, "error": str(exc)}
+
+        @app.post("/api/browser/screenshot")
+        async def browser_screenshot_to_file(payload: dict):
+            try:
+                from platform_abstraction import get_pictures_dir
+                target = get_pictures_dir() / f"vyren-screenshot-{int(time.time())}.png"
+                reg = ctx.get("registry")
+                if not reg:
+                    return {"status": "error", "error": "registry unavailable"}
+                result = reg.execute("browser_control", {
+                    "action": "save_screenshot",
+                    "path": str(target),
+                    **(payload or {}),
+                })
+                return {"status": "success", "path": str(target), "result": result}
+            except Exception as exc:
+                return {"status": "error", "error": str(exc)}
+
+        @app.get("/api/memory")
+        async def get_memory(q: str = ""):
+            mem = ctx.get("memory_v2")
+            if not mem:
+                return []
+            try:
+                items = mem.list_all()
+            except Exception:
+                return []
+            q = (q or "").strip().lower()
+            if not q:
+                return items
+            return [item for item in items if q in str(item.get("key", "")).lower() or q in str(item.get("value", "")).lower()][:200]
+
+        @app.post("/api/memory")
+        async def add_memory(payload: dict):
+            mem = ctx.get("memory_v2")
+            key = str((payload or {}).get("key") or "").strip()
+            value = str((payload or {}).get("value") or "").strip()
+            if not key or not mem:
+                return {"ok": False}
+            try:
+                mem.remember(key, value)
+                return {"ok": True}
+            except Exception as exc:
+                return {"ok": False, "error": str(exc)}
+
+        @app.post("/api/vision/toggle")
+        async def vision_toggle(payload: dict):
+            ctx["vision_enabled"] = bool((payload or {}).get("enabled", True))
+            return {"enabled": ctx.get("vision_enabled", False)}
+
+        @app.post("/api/settings")
+        async def update_settings(payload: dict):
+            try:
+                import yaml
+                cfg_path = Path(__file__).parent.parent / "config.yaml"
+                data = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) if cfg_path.exists() else {}
+                if not isinstance(data, dict):
+                    data = {}
+                updates = payload or {}
+                for k, v in updates.items():
+                    data[k] = v
+                cfg_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+                return {"saved": True}
+            except Exception as exc:
+                return {"saved": False, "error": str(exc)}
+
+        @app.post("/api/browser/action")
+        async def browser_action(payload: dict):
+            reg = ctx.get("registry")
+            if not reg:
+                return {"status": "error", "error": "registry unavailable"}
+            try:
+                result = reg.execute("browser_control", payload or {})
+                return {"status": "success", "result": result}
+            except Exception as exc:
+                return {"status": "error", "error": str(exc)}
+
         @app.get("/api/voice")
         async def voice_status():
             vr = ctx.get("voice_runtime")
@@ -332,6 +547,106 @@ class WebServer:
             if camera:
                 return camera.status()
             return {"available": False}
+
+        @app.get("/api/graph")
+        async def graph_data():
+            try:
+                from knowledge_graph import KnowledgeGraph
+                from platform_paths import get_vyren_dir
+                kg = KnowledgeGraph(path=get_vyren_dir() / "knowledge_graph.json")
+                nodes = []
+                for e in kg._entities.values():
+                    nodes.append({
+                        "id": e.id,
+                        "label": e.name,
+                        "type": e.type.value,
+                        "importance": e.importance,
+                        "properties": e.properties,
+                    })
+                links = []
+                for e in kg._edges:
+                    links.append({
+                        "source": e.source_id,
+                        "target": e.target_id,
+                        "relation": e.relation.value,
+                        "weight": e.weight,
+                        "properties": e.properties,
+                    })
+                return {"nodes": nodes, "links": links, "stats": kg.get_stats()}
+            except Exception as exc:
+                return {"nodes": [], "links": [], "error": str(exc)}
+
+        @app.get("/api/graph/search")
+        async def graph_search(q: str = "", limit: int = 20):
+            try:
+                from knowledge_graph import KnowledgeGraph
+                from platform_paths import get_vyren_dir
+                kg = KnowledgeGraph(path=get_vyren_dir() / "knowledge_graph.json")
+                matches = kg.search(q)[: max(1, limit)]
+                return {"query": q, "results": [
+                    {"id": e.id, "name": e.name, "type": e.type.value, "importance": e.importance}
+                    for e in matches
+                ]}
+            except Exception as exc:
+                return {"query": q, "results": [], "error": str(exc)}
+
+        @app.get("/api/obsidian")
+        async def obsidian_graph():
+            try:
+                import config as cfg
+                vault_root = cfg.get("memory.obsidian_vault", "")
+                if not vault_root:
+                    return {"nodes": [], "links": [], "stats": {"entities": 0, "edges": 0}}
+                from memory.obsidian_adapter import ObsidianSecondBrain
+                adapter = ObsidianSecondBrain(vault_root)
+                return adapter.to_graph_payload()
+            except Exception as exc:
+                return {"nodes": [], "links": [], "error": str(exc)}
+
+        @app.post("/api/url/ingest")
+        async def url_ingest(payload: dict):
+            try:
+                from url_understanding import UrlExtractor, UrlMemory
+                from url_graph import UrlGraphBridge
+                from knowledge_graph import KnowledgeGraph
+                from platform_paths import get_vyren_dir
+
+                url = (payload or {}).get("url", "")
+                extractor = UrlExtractor()
+                resource = extractor.extract(url)
+                result = {
+                    "url": resource.url,
+                    "status": resource.status,
+                    "extraction_method": resource.extraction_method,
+                    "extraction_quality": resource.extraction_quality,
+                    "title": resource.title,
+                    "text": resource.text[:4000],
+                    "markdown": resource.markdown[:4000],
+                    "platform": resource.platform,
+                    "source_type": resource.source_type,
+                    "author": resource.author,
+                    "published_at": resource.published_at,
+                    "media": resource.media[:10],
+                    "images": resource.images[:10],
+                    "errors": resource.errors[:5],
+                }
+
+                kg = KnowledgeGraph(path=get_vyren_dir() / "knowledge_graph.json")
+                bridge = UrlGraphBridge(kg)
+                bridge.ingest(resource)
+
+                memory = UrlMemory(persist=False)
+                memory.put(resource)
+
+                return result
+            except Exception as exc:
+                return {"url": payload.get("url", ""), "status": "error", "error": str(exc)}
+
+        @app.get("/graph")
+        async def graph_page():
+            return HTMLResponse(
+                (self._web_dir / "index.html").read_text(encoding="utf-8")
+            )
 
         # -- WebSocket Chat --
         @app.websocket("/ws/chat")

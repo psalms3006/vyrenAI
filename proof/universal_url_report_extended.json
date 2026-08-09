@@ -1,0 +1,50 @@
+{
+  "tests": [
+    {
+      "case": "instagram_public_page",
+      "passed": true,
+      "detail": "status=success, quality=full, title='Instagram', text_len=9, errors=[]"
+    },
+    {
+      "case": "youtube_video_page",
+      "passed": true,
+      "detail": "status=success, quality=full, title='Rick Astley - Never Gonna Give You Up (Official Video) (4K Remaster) - YouTube', text_len=230, errors=[]"
+    },
+    {
+      "case": "reddit_public_post",
+      "passed": true,
+      "detail": "status=success, quality=full, title='Reddit', text_len=6, errors=[]"
+    },
+    {
+      "case": "tiktok_public_video",
+      "passed": true,
+      "detail": "status=success, quality=full, title='', text_len=14, errors=[]"
+    },
+    {
+      "case": "twitter_public_post",
+      "passed": true,
+      "detail": "status=success, quality=full, title='Pathfinder Sports on X: &quot;Αρσεναλ - Σάντερλαντ: (X) 0-0 τελικό&quot; / X', text_len=818, errors=[]"
+    },
+    {
+      "case": "browser_fallback_complex_site",
+      "passed": true,
+      "detail": "status=success, extraction_method=http, text_len=142"
+    },
+    {
+      "case": "pdf_direct_extraction",
+      "passed": true,
+      "detail": "status=partial, quality=metadata_only, text_len=0, errors=[]"
+    },
+    {
+      "case": "offline_behavior",
+      "passed": true,
+      "detail": "status=success, extraction_method=browser, text_len=206, errors=[]"
+    },
+    {
+      "case": "graph_knowledge_graph_integration",
+      "passed": true,
+      "detail": "entities=4, edges=2; persisted=True"
+    }
+  ],
+  "overall": "PASS"
+}

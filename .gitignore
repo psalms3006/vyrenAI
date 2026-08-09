@@ -28,3 +28,4 @@ memory.json
 
 # Config with real values (Tier 6+)
 config.local.yaml
+.aider*

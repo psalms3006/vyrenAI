@@ -229,4 +229,109 @@ def is_android() -> bool:
 
 
 def is_desktop() -> bool:
-    return get_env().platform in {Platform.WINDOWS, Platform.LINUX, Platform.MACOS}
+    return get_platform() in {Platform.WINDOWS, Platform.LINUX, Platform.MACOS}
+
+
+def get_desktop_dir() -> Path:
+    return _resolve_system_dir("desktop")
+
+
+def get_documents_dir() -> Path:
+    return _resolve_system_dir("documents")
+
+
+def get_downloads_dir() -> Path:
+    return _resolve_system_dir("downloads")
+
+
+def get_pictures_dir() -> Path:
+    return _resolve_system_dir("pictures")
+
+
+def get_music_dir() -> Path:
+    return _resolve_system_dir("music")
+
+
+def get_videos_dir() -> Path:
+    return _resolve_system_dir("videos")
+
+
+def _resolve_system_dir(name: str) -> Path:
+    env_map = {
+        "desktop": ["USERPROFILE", "HOME"],
+        "documents": ["USERPROFILE", "HOME"],
+        "downloads": ["USERPROFILE", "HOME"],
+        "pictures": ["USERPROFILE", "HOME"],
+        "music": ["USERPROFILE", "HOME"],
+        "videos": ["USERPROFILE", "HOME"],
+    }
+    candidates = env_map.get(name, [])
+    base = None
+    for var in candidates:
+        value = os.environ.get(var)
+        if value:
+            base = Path(value)
+            break
+    if base is None:
+        base = Path.home()
+    if get_platform() == Platform.WINDOWS:
+        return base / name.title()
+    return base / name.capitalize()
+
+
+def shutdown_system(delay: int = 30) -> str:
+    system = get_platform()
+    if system == Platform.WINDOWS:
+        import subprocess
+        subprocess.run(["shutdown", "/s", "/t", str(max(0, delay))], check=False)
+        return f"Windows shutdown scheduled in {delay}s."
+    if system == Platform.MACOS:
+        import subprocess
+        subprocess.run(["sudo", "shutdown", "-h", "+" + str(max(0, delay // 60))], check=False)
+        return f"macOS shutdown scheduled in {delay}s."
+    import subprocess
+    subprocess.run(["sudo", "shutdown", "-h", "+" + str(max(0, delay // 60))], check=False)
+    return f"System shutdown scheduled in {delay}s."
+
+
+def restart_system(delay: int = 30) -> str:
+    system = get_platform()
+    if system == Platform.WINDOWS:
+        import subprocess
+        subprocess.run(["shutdown", "/r", "/t", str(max(0, delay))], check=False)
+        return f"Windows restart scheduled in {delay}s."
+    if system == Platform.MACOS:
+        import subprocess
+        subprocess.run(["sudo", "shutdown", "-r", "now"], check=False)
+        return "macOS restart scheduled."
+    import subprocess
+    subprocess.run(["sudo", "reboot"], check=False)
+    return "System restart scheduled."
+
+
+def sleep_system() -> str:
+    system = get_platform()
+    if system == Platform.WINDOWS:
+        import subprocess
+        subprocess.run(["rundll32.exe", "powrprof.dll,SetSuspendState", "0,1,0"], check=False)
+        return "Windows sleep requested."
+    if system == Platform.MACOS:
+        import subprocess
+        subprocess.run(["pmset", "sleepnow"], check=False)
+        return "macOS sleep requested."
+    import subprocess
+    subprocess.run(["systemctl", "suspend"], check=False)
+    return "System sleep requested."
+
+
+def set_system_volume(level: int) -> str:
+    system = get_platform()
+    level = max(0, min(100, int(level)))
+    if system == Platform.WINDOWS:
+        import subprocess
+        for _ in range(50):
+            subprocess.run(["powershell", "-Command", "(New-Object -ComObject WScript.Shell).SendKeys([char]175)"], check=False)
+        for _ in range(int((100 - level) / 2)):
+            subprocess.run(["powershell", "-Command", "(New-Object -ComObject WScript.Shell).SendKeys([char]174)"], check=False)
+        return f"Windows volume target: {level}%"
+    return f"Volume target: {level}%"

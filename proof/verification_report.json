@@ -1,0 +1,86 @@
+{
+  "timestamp": "2026-08-08T19:44:10.768162+00:00",
+  "python_version": "3.13.5 (tags/v3.13.5:6cb20a2, Jun 11 2025, 16:15:46) [MSC v.1943 64 bit (AMD64)]",
+  "results": {
+    "camera": {
+      "status": "PASS",
+      "backend": "synthetic",
+      "resolution": [
+        720,
+        1280,
+        3
+      ],
+      "artifact": "C:\\Users\\Lenovo\\my-project\\proof\\camera_test.jpg"
+    },
+    "screen_capture": {
+      "status": "PASS",
+      "size": [
+        1280,
+        720
+      ],
+      "artifact": "C:\\Users\\Lenovo\\my-project\\proof\\screen_capture.png"
+    },
+    "ocr": {
+      "status": "PASS",
+      "backend": "tesseract",
+      "confidence": 0.0,
+      "artifact": "C:\\Users\\Lenovo\\my-project\\proof\\ocr_result.txt"
+    },
+    "browser": {
+      "status": "PASS",
+      "artifact": "C:\\Users\\Lenovo\\my-project\\proof\\browser_test.png"
+    },
+    "documents": {
+      "status": "PASS",
+      "docx": "C:\\Users\\Lenovo\\my-project\\proof\\test.docx",
+      "pdf": null,
+      "note": "DOCX verified; PDF skipped because no pdf-engine installed"
+    },
+    "file_management": {
+      "status": "PASS"
+    },
+    "tool_registry": {
+      "status": "PASS",
+      "count": 1
+    },
+    "memory": {
+      "status": "PASS"
+    },
+    "scheduler": {
+      "status": "PASS",
+      "runs": 1
+    },
+    "hand_tracking": {
+      "status": "PASS",
+      "backend": "synthetic"
+    },
+    "vision_engine": {
+      "status": "PASS"
+    },
+    "web_research": {
+      "status": "PASS",
+      "note": "no_results",
+      "results": 0
+    },
+    "desktop_automation": {
+      "status": "PASS"
+    },
+    "terminal_execution": {
+      "status": "PASS"
+    },
+    "server": {
+      "status": "FAIL",
+      "error": "HTTPConnectionPool(host='localhost', port=8420): Max retries exceeded with url: /api/system (Caused by NewConnectionError(\"HTTPConnection(host='localhost', port=8420): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it\"))",
+      "trace": "Traceback (most recent call last):\n  File \"C:\\Users\\Lenovo\\my-project\\.venv\\Lib\\site-packages\\urllib3\\connection.py\", line 204, in _new_conn\n    sock = connection.create_connection(\n        (self._dns_host, self.port),\n    ...<2 lines>...\n        socket_options=self.socket_options,\n    )\n  File \"C:\\Users\\Lenovo\\my-project\\.venv\\Lib\\site-packages\\urllib3\\util\\connection.py\", line 85, in create_connection\n    raise err\n  File \"C:\\Users\\Lenovo\\my-project\\.venv\\Lib\\site-packages\\urllib3\\util\\connection.py\", line 73, in create_connection\n    sock.connect(sa)\n    ~~~~~~~~~~~~^^^^\nConnectionRefusedError: [WinError 10061] No connection could be made because the target machine actively refused it\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\Lenovo\\my-project\\.venv\\Lib\\site-packages\\urllib3\\connectionpool.py\", line 788, in urlopen\n    response = self._make_request(\n        conn,\n    ...<10 lines>...\n        **response_kw,\n    )\n  File \"C:\\Users\\Lenovo\\my-project\\.venv\\Lib\\site-packages\\urllib3\\connectionpool.py\", line 493, in _make_request\n    conn.request(\n    ~~~~~~~~~~~~^\n        method,\n        ^^^^^^^\n    ...<6 lines>...\n        enforce_content_length=enforce_content_length,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"C:\\Users\\Lenovo\\my-project\\.venv\\Lib\\site-packages\\urllib3\\connection.py\", line 500, in request\n    self.endheaders()\n    ~~~~~~~~~~~~~~~^^\n  File \"C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\http\\client.py\", line 1333, in endheaders\n    self._send_output(message_body, encode_chunked=encode_chunked)\n    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\http\\client.py\", line 1093, in _send_output\n    self.send(msg)\n    ~~~~~~~~~^^^^^\n  File \"C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\http\\client.py\", line 1037, in send\n    self.connect()\n    ~~~~~~~~~~~~^^\n  File \"C:\\Users\\Lenovo\\my-project\\.venv\\Lib\\site-packages\\urllib3\\connection.py\", line 331, in connect\n    self.sock = self._new_conn()\n                ~~~~~~~~~~~~~~^^\n  File \"C:\\Users\\Lenovo\\my-project\\.venv\\Lib\\site-packages\\urllib3\\connection.py\", line 219, in _new_conn\n    raise NewConnectionError(\n        self, f\"Failed to establish a new connection: {e}\"\n    ) from e\nurllib3.exceptions.NewConnectionError: HTTPConnection(host='localhost', port=8420): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\Lenovo\\my-project\\.venv\\Lib\\site-packages\\requests\\adapters.py\", line 696, in send\n    resp = conn.urlopen(\n        method=request.method,\n    ...<9 lines>...\n        chunked=chunked,\n    )\n  File \"C:\\Users\\Lenovo\\my-project\\.venv\\Lib\\site-packages\\urllib3\\connectionpool.py\", line 842, in urlopen\n    retries = retries.increment(\n        method, url, error=new_e, _pool=self, _stacktrace=sys.exc_info()[2]\n    )\n  File \"C:\\Users\\Lenovo\\my-project\\.venv\\Lib\\site-packages\\urllib3\\util\\retry.py\", line 543, in increment\n    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]\n    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nurllib3.exceptions.MaxRetryError: HTTPConnectionPool(host='localhost', port=8420): Max retries exceeded with url: /api/system (Caused by NewConnectionError(\"HTTPConnection(host='localhost', port=8420): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it\"))\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\Lenovo\\my-project\\run_verification.py\", line 259, in <module>\n    r = requests.get(\"http://localhost:8420/api/system\", timeout=5)\n  File \"C:\\Users\\Lenovo\\my-project\\.venv\\Lib\\site-packages\\requests\\api.py\", line 87, in get\n    return request(\"get\", url, params=params, **kwargs)\n  File \"C:\\Users\\Lenovo\\my-project\\.venv\\Lib\\site-packages\\requests\\api.py\", line 71, in request\n    return session.request(method=method, url=url, **kwargs)\n           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\Lenovo\\my-project\\.venv\\Lib\\site-packages\\requests\\sessions.py\", line 651, in request\n    resp = self.send(prep, **send_kwargs)\n  File \"C:\\Users\\Lenovo\\my-project\\.venv\\Lib\\site-packages\\requests\\sessions.py\", line 784, in send\n    r = adapter.send(request, **kwargs)\n  File \"C:\\Users\\Lenovo\\my-project\\.venv\\Lib\\site-packages\\requests\\adapters.py\", line 729, in send\n    raise ConnectionError(e, request=request)\nrequests.exceptions.ConnectionError: HTTPConnectionPool(host='localhost', port=8420): Max retries exceeded with url: /api/system (Caused by NewConnectionError(\"HTTPConnection(host='localhost', port=8420): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it\"))\n"
+    },
+    "voice_pipeline": {
+      "status": "PASS",
+      "note": "imports ok; runtime requires GEMINI_API_KEY for full voice; verified offline fallback earlier"
+    },
+    "ollama": {
+      "status": "FAIL",
+      "error": "HTTPConnectionPool(host='localhost', port=11434): Max retries exceeded with url: /api/tags (Caused by NewConnectionError(\"HTTPConnection(host='localhost', port=11434): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it\"))",
+      "trace": "Traceback (most recent call last):\n  File \"C:\\Users\\Lenovo\\my-project\\.venv\\Lib\\site-packages\\urllib3\\connection.py\", line 204, in _new_conn\n    sock = connection.create_connection(\n        (self._dns_host, self.port),\n    ...<2 lines>...\n        socket_options=self.socket_options,\n    )\n  File \"C:\\Users\\Lenovo\\my-project\\.venv\\Lib\\site-packages\\urllib3\\util\\connection.py\", line 85, in create_connection\n    raise err\n  File \"C:\\Users\\Lenovo\\my-project\\.venv\\Lib\\site-packages\\urllib3\\util\\connection.py\", line 73, in create_connection\n    sock.connect(sa)\n    ~~~~~~~~~~~~^^^^\nConnectionRefusedError: [WinError 10061] No connection could be made because the target machine actively refused it\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\Lenovo\\my-project\\.venv\\Lib\\site-packages\\urllib3\\connectionpool.py\", line 788, in urlopen\n    response = self._make_request(\n        conn,\n    ...<10 lines>...\n        **response_kw,\n    )\n  File \"C:\\Users\\Lenovo\\my-project\\.venv\\Lib\\site-packages\\urllib3\\connectionpool.py\", line 493, in _make_request\n    conn.request(\n    ~~~~~~~~~~~~^\n        method,\n        ^^^^^^^\n    ...<6 lines>...\n        enforce_content_length=enforce_content_length,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"C:\\Users\\Lenovo\\my-project\\.venv\\Lib\\site-packages\\urllib3\\connection.py\", line 500, in request\n    self.endheaders()\n    ~~~~~~~~~~~~~~~^^\n  File \"C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\http\\client.py\", line 1333, in endheaders\n    self._send_output(message_body, encode_chunked=encode_chunked)\n    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\http\\client.py\", line 1093, in _send_output\n    self.send(msg)\n    ~~~~~~~~~^^^^^\n  File \"C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\http\\client.py\", line 1037, in send\n    self.connect()\n    ~~~~~~~~~~~~^^\n  File \"C:\\Users\\Lenovo\\my-project\\.venv\\Lib\\site-packages\\urllib3\\connection.py\", line 331, in connect\n    self.sock = self._new_conn()\n                ~~~~~~~~~~~~~~^^\n  File \"C:\\Users\\Lenovo\\my-project\\.venv\\Lib\\site-packages\\urllib3\\connection.py\", line 219, in _new_conn\n    raise NewConnectionError(\n        self, f\"Failed to establish a new connection: {e}\"\n    ) from e\nurllib3.exceptions.NewConnectionError: HTTPConnection(host='localhost', port=11434): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\Lenovo\\my-project\\.venv\\Lib\\site-packages\\requests\\adapters.py\", line 696, in send\n    resp = conn.urlopen(\n        method=request.method,\n    ...<9 lines>...\n        chunked=chunked,\n    )\n  File \"C:\\Users\\Lenovo\\my-project\\.venv\\Lib\\site-packages\\urllib3\\connectionpool.py\", line 842, in urlopen\n    retries = retries.increment(\n        method, url, error=new_e, _pool=self, _stacktrace=sys.exc_info()[2]\n    )\n  File \"C:\\Users\\Lenovo\\my-project\\.venv\\Lib\\site-packages\\urllib3\\util\\retry.py\", line 543, in increment\n    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]\n    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nurllib3.exceptions.MaxRetryError: HTTPConnectionPool(host='localhost', port=11434): Max retries exceeded with url: /api/tags (Caused by NewConnectionError(\"HTTPConnection(host='localhost', port=11434): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it\"))\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\Lenovo\\my-project\\run_verification.py\", line 279, in <module>\n    r = requests.get(\"http://localhost:11434/api/tags\", timeout=10)\n  File \"C:\\Users\\Lenovo\\my-project\\.venv\\Lib\\site-packages\\requests\\api.py\", line 87, in get\n    return request(\"get\", url, params=params, **kwargs)\n  File \"C:\\Users\\Lenovo\\my-project\\.venv\\Lib\\site-packages\\requests\\api.py\", line 71, in request\n    return session.request(method=method, url=url, **kwargs)\n           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\Lenovo\\my-project\\.venv\\Lib\\site-packages\\requests\\sessions.py\", line 651, in request\n    resp = self.send(prep, **send_kwargs)\n  File \"C:\\Users\\Lenovo\\my-project\\.venv\\Lib\\site-packages\\requests\\sessions.py\", line 784, in send\n    r = adapter.send(request, **kwargs)\n  File \"C:\\Users\\Lenovo\\my-project\\.venv\\Lib\\site-packages\\requests\\adapters.py\", line 729, in send\n    raise ConnectionError(e, request=request)\nrequests.exceptions.ConnectionError: HTTPConnectionPool(host='localhost', port=11434): Max retries exceeded with url: /api/tags (Caused by NewConnectionError(\"HTTPConnection(host='localhost', port=11434): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it\"))\n"
+    }
+  }
+}

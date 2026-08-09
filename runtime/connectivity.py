@@ -26,6 +26,10 @@ from platform_paths import get_offline_queue_path
 
 logger = logging.getLogger("vyren.connectivity")
 
+VOICE_FAILURE_THRESHOLD = 3
+VOICE_RECOVERY_CHECK_INTERVAL_S = 30
+VOICE_RECOVERY_REQUIRED_SUCCESSES = 2
+
 
 class ConnectivityMode(Enum):
     ONLINE = "online"
@@ -59,8 +63,12 @@ class ConnectivityManager:
     """
 
     def __init__(self, ctx: dict, check_interval: int = 10):
+        import config as _cfg
         self._ctx = ctx
-        self._status = ConnectivityStatus(check_interval=check_interval)
+        cfg_interval = _cfg.get("connectivity.check_interval", check_interval)
+        self._status = ConnectivityStatus(check_interval=cfg_interval)
+        self._status.offline_threshold = _cfg.get("connectivity.offline_threshold", VOICE_FAILURE_THRESHOLD)
+        self._status.recovery_threshold = _cfg.get("connectivity.recovery_threshold", VOICE_RECOVERY_REQUIRED_SUCCESSES)
         self._monitoring = False
         self._monitor_thread: threading.Thread | None = None
         self._stop_event = threading.Event()

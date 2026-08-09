@@ -1,0 +1,25 @@
+{
+  "tests": [
+    {
+      "case": "graph_api_endpoints",
+      "passed": true,
+      "detail": "status=200, nodes=4, links=2"
+    },
+    {
+      "case": "graph_search_endpoint",
+      "passed": true,
+      "detail": "status=200, results=0"
+    },
+    {
+      "case": "graph_page_served",
+      "passed": true,
+      "detail": "status=200, html_len=7234"
+    },
+    {
+      "case": "graph_html_exists",
+      "passed": true,
+      "detail": "file_exists=True, size=7234"
+    }
+  ],
+  "overall": "PASS"
+}

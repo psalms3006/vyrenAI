@@ -30,9 +30,43 @@ load_dotenv()
 
 
 def main():
+    import argparse
+    import threading
+    import time as _time
+    import webbrowser
+
+    parser = argparse.ArgumentParser(description="VYREN")
+    parser.add_argument("--app", action="store_true", help="Launch desktop app window instead of browser")
+    args = parser.parse_args()
+
     from runtime.manager import RuntimeManager
 
     runtime = RuntimeManager()
+
+    if args.app:
+        try:
+            from apps.desktop.vyren_app import launch_dashboard
+            launch_dashboard()
+            return
+        except Exception as exc:
+            print(f"  [Desktop app launch failed: {exc}]")
+
+    def _open_interface_when_ready():
+        try:
+            for _ in range(240):
+                port = runtime._services.get("server_port") if runtime._services else None
+                if port:
+                    break
+                _time.sleep(0.25)
+            else:
+                return
+            url = f"http://localhost:{port}"
+            webbrowser.open_new_tab(url)
+            print(f"  Interface: {url}\n")
+        except Exception as exc:
+            print(f"  [Interface launch skipped: {exc}]")
+
+    threading.Thread(target=_open_interface_when_ready, name="vyren-interface", daemon=True).start()
 
     try:
         runtime.start()

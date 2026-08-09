@@ -3,10 +3,12 @@
   "short_name": "VYREN",
   "description": "VYREN — Autonomous AI Operating System",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#08080f",
   "theme_color": "#08080f",
-  "orientation": "portrait",
+  "orientation": "any",
+  "categories": ["utilities", "productivity"],
   "icons": [
     {
       "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%2308080f' width='192' height='192' rx='42'/><text x='96' y='130' text-anchor='middle' font-size='120'>⚡</text></svg>",
@@ -14,6 +16,5 @@
       "type": "image/svg+xml",
       "purpose": "any maskable"
     }
-  ],
-  "categories": ["utilities", "productivity"]
+  ]
 }

@@ -78,6 +78,9 @@ connectivity:
   check_interval: 10
   offline_threshold: 3
   recovery_threshold: 2
+  voice_failure_threshold: 3
+  voice_recovery_check_interval_s: 30
+  voice_recovery_required_successes: 2
 runtime:
   health_check_interval: 30
   auto_checkpoint_interval: 300

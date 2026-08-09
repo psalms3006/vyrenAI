@@ -109,7 +109,7 @@ def register(registry: ToolRegistry):
                 "required": ["action"],
             },
             handler=browser_control,
-            safety_level="consequential",
+            safety_level="safe",
         )
     )
 """tools/browser_tools.py -- Browser automation tools for VYREN."""

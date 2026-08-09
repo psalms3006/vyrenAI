@@ -173,6 +173,15 @@ class VoiceRuntime:
 
         self._offline_loop = None  # voice.offline_loop.OfflineVoiceLoop, lazy-created
 
+        # Connectivity-driven voice mode state.
+        # These are the single source of truth for voice mode transitions,
+        # separate from the engine's own reconnect loop. The connectivity
+        # manager can ask these directly and the voice runtime can also
+        # force transitions on repeated engine failures.
+        self._voice_failure_count = 0
+        self._voice_recovery_check_interval_s = 30.0
+        self._voice_recovery_required_successes = 2
+
         # Mark-style unified conversation: typed input goes through the
         # same live session as voice. Reply surfacing uses a small
         # synchronization primitive so the terminal can wait for and print
@@ -197,6 +206,15 @@ class VoiceRuntime:
             )
         except Exception:
             self._voice_supervisor = None
+
+        # Configurable threshold for connectivity-driven mode transitions.
+        try:
+            import config as _cfg
+            self._voice_failure_threshold = int(
+                _cfg.get("connectivity.voice_failure_threshold", 3)
+            )
+        except Exception:
+            self._voice_failure_threshold = 3
 
     @property
     def is_active(self) -> bool:
@@ -430,6 +448,23 @@ class VoiceRuntime:
         )
         self._engine_thread.start()
         logger.info("Voice: Gemini Live engine started (shared architecture v2.4)")
+
+        # Reset voice connectivity failure counter on successful start.
+        # This does not mean the WebSocket connected yet — that is
+        # signaled separately by _on_connected() — but starting a fresh
+        # Gemini Live session means any prior consecutive failures are
+        # no longer relevant.
+        self._voice_failure_count = 0
+        try:
+            import config as _cfg
+            self._voice_recovery_check_interval_s = float(
+                _cfg.get("connectivity.voice_recovery_check_interval_s", 30.0)
+            )
+            self._voice_recovery_required_successes = int(
+                _cfg.get("connectivity.voice_recovery_required_successes", 2)
+            )
+        except Exception:
+            pass
 
     def _build_live_config(self) -> types.LiveConnectConfig:
         """Build a fresh LiveConnectConfig for each connect/reconnect.
@@ -675,6 +710,23 @@ class VoiceRuntime:
             if audit:
                 audit.tool_call(name, args, "(voice)")
 
+            try:
+                self._notify_state("thinking")
+            except Exception:
+                pass
+
+            try:
+                broadcast = self._ctx.get("ws_broadcast")
+                if broadcast:
+                    broadcast({
+                        "type": "tool_call",
+                        "name": name,
+                        "args": args,
+                        "status": "started",
+                    })
+            except Exception:
+                pass
+
             if registry:
                 try:
                     result = await asyncio.to_thread(registry.execute, name, args)
@@ -683,6 +735,18 @@ class VoiceRuntime:
                     logger.error("Voice tool error: %s -> %s", name, e)
             else:
                 result = "Error: no tool registry"
+
+            try:
+                broadcast = self._ctx.get("ws_broadcast")
+                if broadcast:
+                    broadcast({
+                        "type": "tool_result",
+                        "name": name,
+                        "result": str(result)[:300],
+                        "status": "done",
+                    })
+            except Exception:
+                pass
 
             if audit:
                 audit.tool_call(name, args, str(result)[:100])
@@ -757,15 +821,55 @@ class VoiceRuntime:
     def _on_engine_state_change(self, state: VoiceState):
         """Forward engine state to VYREN's state system.
 
-        FAILED means the engine gave up reconnecting (see engine.py's
-        max_consecutive_reconnect_failures) — that's the signal to stop
-        banging on a dead connection and switch to the offline loop
-        instead of retrying forever.
+        Also counts meaningful Gemini connectivity failures for the
+        connectivity-driven offline transition:
+          - RECONNECTING = one failed session attempt
+          - LISTENING    = successful communication, reset counter
+          - FAILED       = engine exhausted its own retries, treat as
+                           one additional meaningful failure and switch
+                           to offline if threshold is breached
         """
         self._notify_state(state.value)
-        if state == VoiceState.FAILED and self._active and not self._fallback_mode:
-            logger.warning("Voice: Gemini Live gave up reconnecting — switching to offline mode")
-            self._start_fallback(reason="engine_gave_up")
+        threshold = int(getattr(self, "_voice_failure_threshold", 3) or 3)
+
+        if state == VoiceState.RECONNECTING:
+            self._voice_failure_count += 1
+            logger.warning(
+                "[CONNECTIVITY] Gemini Live failure %d/%d",
+                self._voice_failure_count,
+                threshold,
+            )
+            if self._voice_failure_count >= threshold:
+                logger.warning(
+                    "[CONNECTIVITY] Switching to OFFLINE mode after %d failures",
+                    self._voice_failure_count,
+                )
+                self._start_fallback(reason="connectivity_failures")
+
+        elif state == VoiceState.LISTENING:
+            if getattr(self, "_voice_failure_count", 0):
+                logger.info(
+                    "[CONNECTIVITY] Gemini Live recovered — failure counter reset"
+                )
+            self._voice_failure_count = 0
+
+        elif state == VoiceState.FAILED and self._active and not self._fallback_mode:
+            # Engine gave up on its own; count this as a failure too, but
+            # avoid double-switching if RECONNECTING already crossed the
+            # threshold and started fallback.
+            if not getattr(self, "_fallback_started_by_threshold", False):
+                self._voice_failure_count += 1
+                logger.warning(
+                    "[CONNECTIVITY] Gemini Live failure %d/%d (engine gave up)",
+                    self._voice_failure_count,
+                    threshold,
+                )
+                if self._voice_failure_count >= threshold:
+                    logger.warning(
+                        "[CONNECTIVITY] Switching to OFFLINE mode after %d failures",
+                        self._voice_failure_count,
+                    )
+                    self._start_fallback(reason="connectivity_failures")
 
     def _on_transcription(self, user_text: str, model_text: str):
         """Forward transcriptions for display/logging."""
@@ -780,6 +884,40 @@ class VoiceRuntime:
 
     def _on_error(self, error: str):
         logger.error("Voice engine error: %s", error)
+
+    # ------------------------------------------------------------------
+    # Connectivity failure accounting
+    # ------------------------------------------------------------------
+
+    def record_connectivity_failure(self, error: str = "") -> None:
+        """Record a meaningful Gemini connectivity failure.
+
+        Only meaningful failures should call this: network errors,
+        session failures, and similar connectivity issues. Ordinary
+        conversation turns or non-connectivity errors should not.
+        """
+        threshold = int(getattr(self, "_voice_failure_threshold", 3) or 3)
+        self._voice_failure_count += 1
+        logger.warning(
+            "[CONNECTIVITY] Gemini Live failure %d/%d%s",
+            self._voice_failure_count,
+            threshold,
+            (f" — {error}" if error else ""),
+        )
+        if self._voice_failure_count >= threshold:
+            logger.warning(
+                "[CONNECTIVITY] Switching to OFFLINE mode after %d failures",
+                self._voice_failure_count,
+            )
+            self._start_fallback(reason="connectivity_failures")
+
+    def record_connectivity_success(self) -> None:
+        """Reset the connectivity failure counter on a successful Gemini turn."""
+        if getattr(self, "_voice_failure_count", 0):
+            logger.info(
+                "[CONNECTIVITY] Gemini Live recovered — failure counter reset"
+            )
+        self._voice_failure_count = 0
 
     # ------------------------------------------------------------------
     # Recovery hooks for the shared VoiceSupervisor
@@ -825,6 +963,8 @@ class VoiceRuntime:
         not just idle waiting. Auto-recovers to Gemini Live once a key
         and internet are both available again.
         """
+        if getattr(self, "_fallback_mode", False):
+            return
         self._active = True
         self._fallback_mode = True
         self._fallback_reason = reason
@@ -866,15 +1006,16 @@ class VoiceRuntime:
         logger.info("Fallback voice: offline conversation loop active.")
         self._notify_state("fallback")
 
-        recovery_check_interval = 30
         last_check = 0.0
+        recovered_ok = False
 
         while self._active and not self._stop_event.is_set():
             now = time.time()
 
-            if now - last_check >= recovery_check_interval:
+            if now - last_check >= self._voice_recovery_check_interval_s:
                 last_check = now
                 if self._can_recover_to_live() and _genai_live_available():
+                    recovered_ok = True
                     logger.info("Voice: Internet detected. Transitioning to Gemini Live.")
                     self._fallback_mode = False
                     if self._offline_loop:
@@ -890,7 +1031,8 @@ class VoiceRuntime:
         if self._offline_loop:
             self._offline_loop.stop()
             self._offline_loop = None
-        logger.info("Fallback voice: stopped.")
+        if not recovered_ok:
+            logger.info("Fallback voice: stopped without recovery.")
 
     def _can_recover_to_live(self) -> bool:
         """Check if we can switch back to Gemini Live."""

@@ -1,0 +1,55 @@
+{
+  "tests": [
+    {
+      "case": "detect_urls",
+      "passed": true,
+      "detail": "['https://example.com', 'https://example.org/page']"
+    },
+    {
+      "case": "classify_url",
+      "passed": true,
+      "detail": "{'url': 'https://github.com/psalms3006/vyrenAI', 'source_type': 'web', 'platform': 'github'}"
+    },
+    {
+      "case": "classify_pdf",
+      "passed": true,
+      "detail": "{'url': 'https://example.com/file.pdf', 'source_type': 'document', 'platform': 'pdf'}"
+    },
+    {
+      "case": "http_website_extraction",
+      "passed": true,
+      "detail": "status=success, quality=full, title='Example Domain', text_len=142"
+    },
+    {
+      "case": "http_document_extraction_pdf",
+      "passed": true,
+      "detail": "status=partial, quality=metadata_only, text_len=0, errors=[]"
+    },
+    {
+      "case": "github_extraction",
+      "passed": true,
+      "detail": "status=success, quality=full, text_len=19521, title='GitHub - psalms3006/vyrenAI · GitHub'"
+    },
+    {
+      "case": "browser_fallback_js_site",
+      "passed": true,
+      "detail": "status=success, extraction_method=http, text_len=142"
+    },
+    {
+      "case": "invalid_url",
+      "passed": true,
+      "detail": "status=malformed_url, errors=['URL does not match http/https pattern']"
+    },
+    {
+      "case": "url_memory_persistence",
+      "passed": true,
+      "detail": "stored=True, recalled=True"
+    },
+    {
+      "case": "conversation_context",
+      "passed": true,
+      "detail": "ctx_len=326, status=success"
+    }
+  ],
+  "overall": "PASS"
+}

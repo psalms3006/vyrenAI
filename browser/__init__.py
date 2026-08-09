@@ -204,7 +204,17 @@ class _BrowserThread:
         self._engine_name, self._exe_path, self._channel, self._is_opera = _find_browser_executable(prog_id)
         engine = getattr(self._playwright, self._engine_name)
 
-        chromium_args = ["--start-maximized"]
+        chromium_args = [
+            "--start-maximized",
+            "--disable-blink-features=AutomationControlled",
+            "--disable-infobars",
+            "--disable-extensions",
+            "--disable-popup-blocking",
+            "--disable-default-apps",
+            "--disable-notifications",
+            "--no-first-run",
+            "--no-default-browser-check",
+        ]
         if self._is_opera:
             chromium_args += ["--disable-features=OperaPrivacyMode", "--no-private"]
             logger.info("[Browser] Opera detected — disabling private-mode flags")
@@ -228,7 +238,7 @@ class _BrowserThread:
         except Exception as e:
             logger.warning("[Browser] Launch failed (%s), falling back to built-in Chromium", e)
             self._browser = await self._playwright.chromium.launch(
-                headless=False, args=["--start-maximized"],
+                headless=False, args=chromium_args,
             )
 
     async def _get_page(self) -> Page:
@@ -236,12 +246,15 @@ class _BrowserThread:
 
         if self._context is None:
             self._context = await self._browser.new_context(
-                viewport=None,
+                viewport={"width": 1920, "height": 1080},
                 user_agent=(
                     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                     "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/120.0.0.0 Safari/537.36"
+                    "Chrome/131.0.0.0 Safari/537.36"
                 ),
+                locale="en-US",
+                timezone_id="America/New_York",
+                permissions=[],
             )
 
         if self._page is None or self._page.is_closed():
@@ -254,7 +267,59 @@ class _BrowserThread:
             url = "https://" + url
         page = await self._get_page()
         try:
-            await page.goto(url, wait_until="domcontentloaded", timeout=15000)
+            await page.goto(url, wait_until="domcontentloaded", timeout=20000)
+
+            try:
+                consent_selectors = [
+                    'button:has-text("Accept all")',
+                    'button:has-text("Accept")',
+                    'button:has-text("I agree")',
+                    'button:has-text("Agree")',
+                    'button:has-text("Got it")',
+                    '[aria-label*="Accept" i]',
+                    '[aria-label*="I agree" i]',
+                    'button[aria-label="Close"]',
+                    '[data-testid="cookie-accept"]',
+                    '[id*="cookie"] button',
+                    '.consent button',
+                    '.cookie-consent button',
+                ]
+                for selector in consent_selectors:
+                    try:
+                        btn = page.locator(selector).first
+                        if await btn.count() > 0 and await btn.is_visible(timeout=1500):
+                            await btn.click()
+                            break
+                    except Exception:
+                        continue
+            except Exception:
+                pass
+
+            captcha_indicators = [
+                'iframe[src*="recaptcha"]',
+                'iframe[src*="captcha"]',
+                'div[class*="recaptcha"]',
+                'div[id*="recaptcha"]',
+                'div[class*="captcha"]',
+                'text=/captcha|verify you are human/i',
+            ]
+            blocked = False
+            for indicator in captcha_indicators:
+                try:
+                    loc = page.locator(indicator).first
+                    if await loc.count() > 0 and await loc.is_visible(timeout=2000):
+                        blocked = True
+                        break
+                except Exception:
+                    continue
+
+            if blocked:
+                return (
+                    "Navigation blocked by anti-bot challenge "
+                    "(captcha/recaptcha detected). "
+                    "VYREN will not attempt automated bypass "
+                    "without explicit user authorization."
+                )
             return f"Opened: {page.url}"
         except concurrent.futures.TimeoutError:
             return f"Timeout loading: {url}"
@@ -422,12 +487,50 @@ class _BrowserThread:
             except Exception:
                 pass
             self._playwright = None
-        # Hard-stop the event loop to flush Chromium network/dns state.
-        # Playwright does not always release the resolver cleanly on its own,
-        # which can leave the next launch with net::ERR_NAME_NOT_RESOLVED.
         if self._loop and self._loop.is_running():
             self._loop.call_soon_threadsafe(self._loop.stop)
         return "Browser closed."
+
+    async def _get_browser_info(self) -> dict:
+        return {
+            "engine_name": self._engine_name,
+            "channel": self._channel,
+            "exe_path": self._exe_path,
+            "is_opera": self._is_opera,
+        }
+
+    async def _extract_links(self) -> list[dict]:
+        page = await self._get_page()
+        try:
+            anchors = await page.locator("a[href]").all()
+            out = []
+            for a in anchors[:300]:
+                try:
+                    href = await a.get_attribute("href")
+                    text = (await a.inner_text() or "").strip()
+                    if href:
+                        out.append({"href": href, "text": text[:120]})
+                except Exception:
+                    continue
+            return out
+        except Exception as e:
+            return [{"error": str(e)}]
+
+    async def _extract_text(self) -> str:
+        page = await self._get_page()
+        try:
+            text = await page.inner_text("body")
+            return text[:8000] if len(text) > 8000 else text
+        except Exception as e:
+            return f"Could not get page text: {e}"
+
+    async def _screenshot_to_file(self, path: str) -> str:
+        page = await self._get_page()
+        try:
+            await page.screenshot(path=path, full_page=False)
+            return path
+        except Exception as e:
+            return f"Screenshot file error: {e}"
 
 
 _browser = _BrowserThread()
