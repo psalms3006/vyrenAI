@@ -743,6 +743,55 @@ class WebServer:
             except Exception as exc:
                 return {"nodes": [], "links": [], "error": str(exc)}
 
+        @app.get("/api/board/meetings")
+        async def board_meetings(limit: int = 20):
+            try:
+                from tools.board_tools import list_board_meetings
+                result = await asyncio.get_running_loop().run_in_executor(None, list_board_meetings, limit)
+                try:
+                    return json.loads(result)
+                except Exception:
+                    return {"meetings": result}
+            except Exception as exc:
+                return {"meetings": [], "error": str(exc)}
+
+        @app.get("/api/board/meeting/{meeting_id}")
+        async def board_meeting(meeting_id: str):
+            try:
+                from tools.board_tools import board_meeting
+                result = await asyncio.get_running_loop().run_in_executor(None, board_meeting, meeting_id)
+                try:
+                    return json.loads(result)
+                except Exception:
+                    return {"meeting_id": meeting_id, "result": result}
+            except Exception as exc:
+                return {"meeting_id": meeting_id, "error": str(exc)}
+
+        @app.post("/api/board/convene")
+        async def board_convene(payload: dict):
+            try:
+                from tools.board_tools import convene_board
+                question = str((payload or {}).get("question", "")).strip()
+                seats = payload.get("seats")
+                model_overrides = payload.get("model_overrides")
+                store = bool(payload.get("store", True))
+                if not question:
+                    return {"error": "question is required"}
+                result = await asyncio.get_running_loop().run_in_executor(
+                    None,
+                    convene_board,
+                    question,
+                    json.dumps(seats) if seats is not None else None,
+                    json.dumps(model_overrides) if model_overrides is not None else None,
+                    store,
+                )
+                try:
+                    return json.loads(result)
+                except Exception:
+                    return {"result": result}
+            except Exception as exc:
+                return {"error": str(exc)}
+
         @app.post("/api/url/ingest")
         async def url_ingest(payload: dict):
             try:
@@ -781,6 +830,75 @@ class WebServer:
                 return result
             except Exception as exc:
                 return {"url": payload.get("url", ""), "status": "error", "error": str(exc)}
+
+        @app.get("/api/generation/jobs")
+        async def list_generation_jobs(limit: int = 20):
+            try:
+                from tools.generation_tools import _job_manager
+                return {"jobs": _job_manager.list_jobs(limit)}
+            except Exception as exc:
+                return {"jobs": [], "error": str(exc)}
+
+        @app.get("/api/generation/jobs/{job_id}")
+        async def get_generation_job(job_id: str):
+            try:
+                from tools.generation_tools import _job_manager
+                job = _job_manager.get(job_id)
+                if not job:
+                    return {"job_id": job_id, "error": "not_found"}
+                return {
+                    "job_id": job.id,
+                    "status": job.status.value,
+                    "type": job.request.generation_type.value,
+                    "provider": job.provider,
+                    "model": job.model,
+                    "created_at": job.created_at,
+                    "completed_at": job.completed_at,
+                    "artifacts": [
+                        {
+                            "artifact_id": artifact.artifact_id,
+                            "path": artifact.path,
+                            "filename": artifact.filename,
+                            "mime_type": artifact.mime_type,
+                            "size": artifact.size,
+                        }
+                        for artifact in job.artifacts
+                    ],
+                    "error": job.error,
+                }
+            except Exception as exc:
+                return {"job_id": job_id, "error": str(exc)}
+
+        @app.post("/api/generation/jobs/{job_id}/cancel")
+        async def cancel_generation_job(job_id: str):
+            try:
+                from tools.generation_tools import _job_manager
+                success = _job_manager.cancel(job_id)
+                return {"job_id": job_id, "cancelled": success}
+            except Exception as exc:
+                return {"job_id": job_id, "error": str(exc)}
+
+        @app.get("/api/generation/artifacts")
+        async def list_generated_artifacts(limit: int = 20):
+            try:
+                from tools.generation_tools import _artifact_manager
+                return {"artifacts": _artifact_manager.list_artifacts(limit)}
+            except Exception as exc:
+                return {"artifacts": [], "error": str(exc)}
+
+        @app.post("/api/generation/artifacts/{artifact_id}/download")
+        async def download_generated_artifact(artifact_id: str):
+            try:
+                from tools.generation_tools import _artifact_manager
+                artifact = next((a for a in _artifact_manager.list_artifacts() if a.get("artifact_id") == artifact_id), None)
+                if not artifact:
+                    return JSONResponse(status_code=404, content={"error": "artifact_not_found"})
+                path = artifact.get("path")
+                if not path:
+                    return JSONResponse(status_code=400, content={"error": "missing_path"})
+                return FileResponse(path, filename=artifact.get("filename", "artifact"))
+            except Exception as exc:
+                return JSONResponse(status_code=500, content={"error": str(exc)})
 
         @app.get("/graph")
         async def graph_page():
@@ -855,6 +973,24 @@ class WebServer:
                                 "type": "system_msg",
                                 "system_msg": "Conversation cleared.",
                             })
+                            continue
+                        elif text == "/generation":
+                            try:
+                                from tools.generation_tools import _job_manager
+                                jobs = _job_manager.list_jobs(10)
+                                artifacts = []
+                                for job in jobs:
+                                    for art in job.get("artifacts", []):
+                                        artifacts.append(art)
+                                await websocket.send_json({
+                                    "type": "system_msg",
+                                    "system_msg": f"Generation jobs: {len(jobs)}\nArtifacts: {len(artifacts)}",
+                                })
+                            except Exception as exc:
+                                await websocket.send_json({
+                                    "type": "system_msg",
+                                    "system_msg": f"Generation status error: {exc}",
+                                })
                             continue
 
                     if data.get("type") != "message":
@@ -1056,6 +1192,10 @@ class WebServer:
                     pass
             finally:
                 ctx["ws_clients"].discard(websocket)
+
+        # Mobile Realtime Protocol — same surface as standalone server.py.
+        from runtime.mobile_live import register_mobile_live
+        register_mobile_live(app, ctx)
 
         return app
 

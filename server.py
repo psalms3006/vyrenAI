@@ -76,6 +76,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Mobile Realtime Protocol (/ws/live/mobile) — minimal context built from
+# this module's existing globals. The full RuntimeManager path (which has
+# a richer ctx) registers the same surface in runtime/web_server.py.
+from runtime.mobile_live import register_mobile_live
+register_mobile_live(app, {
+    "system_prompt": system_prompt,
+    "registry": registry,
+    "memory": memory,
+    "audit": audit,
+})
+
 # Static files directory
 WEB_DIR = Path(__file__).parent / "web"
 

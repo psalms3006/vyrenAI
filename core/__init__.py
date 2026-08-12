@@ -127,18 +127,20 @@ class VYRENCtx:
         self.interaction_sm = ConversationStateMachine()
         self.interaction_ctrl = InteractionController(
             self.interaction_sm,
-            cfg.get("interaction", {}),
+            self.config.get("interaction", {}),
         )
         self.media_awareness = MediaAwareness()
         self.mode_manager = ModeManager(controller=self.interaction_ctrl)
 
-        mode_id = cfg.get("interaction.default_mode", "silent")
+        mode_id = self.config.get("interaction.default_mode", "silent")
         self.mode_manager.set_mode(mode_id)
         self.interaction_ctrl.set_media_detector(self.media_awareness.is_user_busy)
 
-        ctx["interaction_controller"] = self.interaction_ctrl
-        ctx["mode_manager"] = self.mode_manager
-        ctx["media_awareness"] = self.media_awareness
+        self._services = {
+            "interaction_controller": self.interaction_ctrl,
+            "mode_manager": self.mode_manager,
+            "media_awareness": self.media_awareness,
+        }
 
         logger.info("VYREN v2 context initialized with all subsystems")
 

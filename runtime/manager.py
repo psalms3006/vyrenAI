@@ -616,18 +616,67 @@ class RuntimeManager:
                 return "No watchdog"
 
             def memory_consolidate(_ctx):
-                ctx["memory_v2"].consolidate()
+                _ctx["memory_v2"].consolidate()
                 return "Memory consolidation done"
+
+            def memory_summary(_ctx):
+                try:
+                    mem = _ctx.get("memory_v2")
+                    if not mem:
+                        return ""
+                    entries = mem.list_all()
+                    return json.dumps({
+                        "count": len(entries),
+                        "layers": {},
+                        "top": entries[:10],
+                    }, ensure_ascii=False)
+                except Exception as exc:
+                    return json.dumps({"error": str(exc)}, ensure_ascii=False)
+
+            def obsidian_sync(_ctx):
+                try:
+                    import config as cfg_mod
+                    vault_root = cfg_mod.get("memory.obsidian_vault", "")
+                    if not vault_root:
+                        return json.dumps({"synced": False, "reason": "no vault configured"}, ensure_ascii=False)
+                    from memory.obsidian_adapter import ObsidianSecondBrain
+                    adapter = ObsidianSecondBrain(vault_root)
+                    entities = adapter.entities()
+                    relations = adapter.relations()
+                    mem = _ctx.get("memory_v2")
+                    if mem:
+                        for entity in entities[:50]:
+                            mem.remember(
+                                key=f"obsidian_{entity.type}_{entity.name}",
+                                value=entity.name,
+                                layer=cfg_mod.get("memory.obsidian_layer", "semantic"),
+                                importance=0.4,
+                                tags=[entity.type, "obsidian"],
+                                source="obsidian_sync",
+                            )
+                    return json.dumps({
+                        "synced": True,
+                        "entities": len(entities),
+                        "relations": len(relations),
+                    }, ensure_ascii=False)
+                except Exception as exc:
+                    return json.dumps({"synced": False, "error": str(exc)}, ensure_ascii=False)
 
             scheduler.register("health_check", health_check)
             scheduler.register("watchdog_check", watchdog_check)
             scheduler.register("memory_consolidate", memory_consolidate)
+            scheduler.register("memory_summary", memory_summary)
+            scheduler.register("obsidian_sync", obsidian_sync)
 
             # Schedule periodic jobs
             scheduler.every(name="health_check", handler="health_check",
                             interval_seconds=600, description="Periodic health check")
             scheduler.every(name="memory_consolidate", handler="memory_consolidate",
                             interval_seconds=3600, description="Hourly memory consolidation")
+            scheduler.every(name="memory_summary", handler="memory_summary",
+                            interval_seconds=1800, description="Memory summary refresh")
+            scheduler.every(name="obsidian_sync", handler="obsidian_sync",
+                            interval_seconds=900, description="Obsidian vault sync")
             scheduler.start()
 
         # Start heartbeat

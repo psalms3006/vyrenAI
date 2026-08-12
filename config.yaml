@@ -56,7 +56,7 @@ heartbeat:
 voice:
   gemini_live_enabled: true
 identity:
-  assistant_name: Vyren
+  assistant_name: Echo
   company: Omniel
   aliases: []
 interaction:

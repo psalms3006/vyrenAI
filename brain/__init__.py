@@ -40,11 +40,16 @@ class Brain:
         # Step 1: Retrieve relevant context
         context = self._retrieve_context(user_input, history)
 
+        # Step 1b: For complex/strategic questions, convene a board meeting
+        board_advice = ""
+        if self._is_boardworthy(user_input):
+            board_advice = self._run_board_meeting(user_input)
+
         # Step 2: Decide reasoning mode
         reasoning_mode = self._select_reasoning_mode(user_input, context)
 
         # Step 3: Build augmented system prompt
-        system_prompt = self._build_prompt(context, reasoning_mode)
+        system_prompt = self._build_prompt(context, reasoning_mode, board_advice=board_advice)
 
         # Step 4: Run model turn with tools
         from provider import run_turn
@@ -85,6 +90,48 @@ class Brain:
             self._post_process(user_input, final_text, turn_start)
 
         return final_text
+
+    def _is_boardworthy(self, user_input: str) -> bool:
+        text = user_input.lower()
+        keywords = [
+            "board", "advisor", "review", "strategy", "architecture",
+            "decision", "tradeoff", "risk", "complex", "compare", "plan",
+        ]
+        return len(text.split()) >= 12 and any(k in text for k in keywords)
+
+    def _run_board_meeting(self, user_input: str) -> str:
+        try:
+            registry = self.ctx.registry
+            if registry is None:
+                return ""
+            tool = registry.get("convene_board")
+            if tool is None:
+                return ""
+            output = registry.execute("convene_board", {
+                "question": user_input,
+                "store": True,
+            })
+            return f"\n\n[Board of Advisors]\n{output}\n"
+        except Exception as exc:
+            logger.debug("Board meeting skipped: %s", exc)
+            return ""
+
+    def _build_prompt(self, context: dict, reasoning_mode: str, board_advice: str = "") -> str:
+        """Build the augmented system prompt with context and reasoning hints."""
+        prompt = self.ctx.system_prompt
+
+        if reasoning_mode and reasoning_mode != "fast":
+            prompt += f"\n\n## Current Reasoning Mode: {reasoning_mode.upper()}"
+            from reasoning import ReasoningEngine
+            engine = ReasoningEngine()
+            hint = engine.get_mode_hint(reasoning_mode)
+            if hint:
+                prompt += f"\n{hint}"
+
+        if board_advice:
+            prompt += f"\n\n## Advisory Board Output\n{board_advice}"
+
+        return prompt
 
     def _retrieve_context(self, user_input: str, history: list) -> dict:
         """Retrieve relevant context from memory, KG, and world model."""

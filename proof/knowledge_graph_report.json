@@ -13,13 +13,13 @@
     {
       "case": "graph_page_served",
       "passed": true,
-      "detail": "status=200, html_len=7234"
+      "detail": "status=200, html_len=156630"
     },
     {
       "case": "graph_html_exists",
-      "passed": true,
-      "detail": "file_exists=True, size=7234"
+      "passed": false,
+      "detail": "EXCEPTION: AssertionError: assert False\n +  where False = exists()\n +    where exists = WindowsPath('C:/Users/Lenovo/my-project/web/graph.html').exists"
     }
   ],
-  "overall": "PASS"
+  "overall": "PARTIAL"
 }

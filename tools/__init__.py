@@ -333,6 +333,18 @@ def create_registry(
     except Exception as e:
         logger.warning("URL tools not loaded: %s", e)
 
+    try:
+        from tools.board_tools import register as register_board
+        register_board(registry)
+    except Exception as e:
+        logger.warning("Board tools not loaded: %s", e)
+
+    try:
+        from tools.generation_tools import register as register_generation
+        register_generation(registry)
+    except Exception as e:
+        logger.warning("Generation tools not loaded: %s", e)
+
     # Log final tool count (helps diagnose 1007 errors)
     names = registry.tool_names()
     logger.info("Tool registry ready: %d tools loaded", len(names))

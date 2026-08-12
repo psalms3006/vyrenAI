@@ -36,8 +36,9 @@ def register(registry: ToolRegistry):
             client = genai.Client(api_key=api_key)
 
             # Try using Gemini's native image generation
+            image_model = os.environ.get("VYREN_IMAGE_MODEL", "gemini-2.5-flash-image")
             response = client.models.generate_content(
-                model="gemini-2.0-flash-exp",
+                model=image_model,
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     response_modalities=["TEXT", "IMAGE"],

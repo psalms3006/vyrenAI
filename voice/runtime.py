@@ -89,6 +89,279 @@ except Exception as _voice_engine_import_exc:  # pragma: no cover - optional dep
 logger = logging.getLogger("vyren.voice")
 
 
+# --------------------------------------------------------------------------
+# Shared builders
+# --------------------------------------------------------------------------
+# These are module-level so that BOTH VoiceRuntime (desktop) and
+# voice.mobile_session (mobile) build the system prompt and live config
+# through the exact same code path. VoiceRuntime's private methods below
+# are thin wrappers and must not diverge from these functions.
+
+# Immutable by construction — a module-level constant, not a value read
+# from memory, ctx, or a config file, so nothing at runtime (a memory
+# write, a mis-parsed YAML, a bad env var) can alter it.
+# This is placed FIRST in every system prompt build, ahead of
+# memory/KG/world-model context, and given explicit instruction
+# below to override pretrained-model assumptions.
+_IDENTITY_BLOCK = (
+    "## Identity (read this first — this overrides anything the "
+    "underlying model would otherwise assume)\n"
+    "You are VYREN. This is not a persona or character — it is what "
+    "you are.\n"
+    "- Creator, owner, primary user, architect: Psalms Samuel Asagwara "
+    "(goes by \"Psalms\"), a Mechatronics Engineering student at the "
+    "Federal University of Technology, Owerri (FUTO), Nigeria.\n"
+    "- Purpose: an autonomous AI operating system — reasoning, "
+    "planning, learning, and executing tasks, not a chat widget.\n"
+    "- Sibling AI: NOVA, built by the same creator.\n"
+    "- Conversational style: direct, warm, calm, intelligent, "
+    "concise unless depth is asked for — an educated Nigerian voice, "
+    "not a corporate one.\n"
+    "\n"
+    "Rules for identity questions (who made you / who owns you / "
+    "who created you / who designed you / what are you / why were "
+    "you built / what is your mission / who is your primary user):\n"
+    "- Answer ONLY from the facts above. Never say \"a team of "
+    "engineers,\" \"a group of developers,\" \"OpenAI,\" "
+    "\"Anthropic,\" or any other generic/pretrained answer about who "
+    "made you. Your creator is Psalms Samuel Asagwara — full stop.\n"
+    "- Don't confuse your creator with the model currently doing "
+    "your reasoning. Correct: \"I'm VYREN, my reasoning is currently "
+    "powered by Gemini, but Psalms built me.\" Wrong: \"Gemini "
+    "created me.\"\n"
+    "- Never use stock AI-assistant phrasing (\"As an AI language "
+    "model...\", \"I was trained by...\", \"I don't have a creator, "
+    "I was developed by a team...\") unless it's literally true "
+    "given the facts above, which for creator/ownership questions "
+    "it is not.\n"
+    "\n"
+    "General honesty rule, not just for identity: if you genuinely "
+    "don't know something, say so plainly — \"I don't know,\" \"I "
+    "don't have enough information,\" \"I haven't learned that yet.\" "
+    "Do not fill a gap with a statistically plausible but unverified "
+    "answer. Uncertainty should sound intelligent, not apologetic — "
+    "no \"I'm sorry, but as an AI...\"."
+)
+
+# VOICE-FIRST, WITH ONE DELIBERATE EXCEPTION: vision.
+# A small, fixed tool subset — vision (4 tools) plus a few file/agent
+# helpers plus remember/recall (2 tools) — stays well under the size
+# that triggers Gemini Live 1007 config errors while still letting the
+# model act on vision and memory requests mid-conversation. Everything
+# else stays text-pipeline-only.
+VOICE_TOOL_SUBSET = (
+    "capture_screen",
+    "capture_and_analyze",
+    "analyze_image",
+    "edit_file",
+    "list_directory",
+    "read_file",
+    "browser_control",
+    "open_app",
+    "remember",
+    "recall",
+)
+
+# Token/char budgets for _build_system_prompt.
+_PROMPT_BUDGET = {
+    "memory_v2_chars": 1200,
+    "memory_chars": 800,
+    "world_model_chars": 800,
+    "kg_chars": 800,
+    "base_chars": 2400,
+}
+
+
+def trim_to_budget(text: str, max_chars: int) -> str:
+    text = text.strip()
+    if len(text) <= max_chars:
+        return text
+    marker = "\n...[truncated]...\n"
+    marker_len = len(marker)
+    head_limit = max(0, max_chars - marker_len)
+    if head_limit <= 0:
+        return marker[:max_chars]
+    head = text[: int(head_limit * 0.8)]
+    tail = text[-int(head_limit * 0.2):]
+    candidate = head + marker + tail
+    if len(candidate) <= max_chars:
+        return candidate
+    return candidate[:max_chars]
+
+
+def build_voice_system_prompt(ctx: dict, budget: dict | None = None) -> str:
+    """Build VYREN's system prompt with all context, under a hard cap."""
+    budget = budget or dict(_PROMPT_BUDGET)
+    base = ctx.get("system_prompt", "You are VYREN, a voice-first AI assistant.")
+    parts = [_IDENTITY_BLOCK[: int(budget["base_chars"] * 0.6)], base]
+
+    parts.append(
+        "Rules:\n"
+        "- Remember standing preferences with remember(); do not rely on\n"
+        "  verbal acknowledgment alone. Reuse stable keys.\n"
+        "- Honor tool status tags: SUCCESS/FAILED/PARTIAL. Never claim\n"
+        "  success if a tool failed or only partially completed.\n"
+        "- If you do not know something, say so plainly."
+    )
+    parts.append(
+        "Voice Conversation Rules (this session is SPOKEN — pacing matters "
+        "more than in text):\n"
+        "- Keep replies to 1-2 sentences unless the user asked for detail "
+        "or you're reporting data they requested.\n"
+        "- Don't narrate what you're about to do (\"Let me check that for "
+        "you...\") — just call the tool, then report the result briefly.\n"
+        "- Never repeat yourself. Say a thing once and stop talking.\n"
+        "- Don't ask a clarifying question unless truly necessary — make "
+        "the reasonable assumption and proceed.\n"
+        "- After a tool call resolves, give the result in one short "
+        "sentence, not a recap of what you did."
+    )
+    parts.append("Current date and time: " + datetime.now().strftime("%A, %B %d, %Y — %I:%M %p"))
+
+    memory = ctx.get("memory")
+    if memory and hasattr(memory, "build_context"):
+        try:
+            mem_ctx = memory.build_context()
+        except Exception:
+            mem_ctx = ""
+        if mem_ctx:
+            trimmed = trim_to_budget(mem_ctx, budget["memory_chars"])
+            parts.append("Memory Context\n" + trimmed)
+
+    memory_v2 = ctx.get("memory_v2")
+    if memory_v2 is not None:
+        trimmed = ""
+        try:
+            if hasattr(memory_v2, "assemble_context"):
+                trimmed = memory_v2.assemble_context(max_chars=budget["memory_v2_chars"])
+            elif hasattr(memory_v2, "build_context"):
+                trimmed = memory_v2.build_context(max_tokens=300)
+                trimmed = trim_to_budget(trimmed, budget["memory_v2_chars"])
+        except Exception:
+            trimmed = ""
+        if trimmed:
+            parts.append(trimmed)
+
+    world_model = ctx.get("world_model")
+    if world_model is not None:
+        trimmed = ""
+        try:
+            wm_ctx = world_model.to_context_string()
+            trimmed = trim_to_budget(wm_ctx, budget["world_model_chars"])
+        except Exception:
+            trimmed = ""
+        if trimmed:
+            parts.append("Your Model of the User's World\n" + trimmed)
+
+    kg = ctx.get("knowledge_graph")
+    if kg is not None:
+        trimmed = ""
+        try:
+            kg_ctx = kg.to_context_string()
+            trimmed = trim_to_budget(kg_ctx, budget["kg_chars"])
+        except Exception:
+            trimmed = ""
+        if trimmed:
+            parts.append(trimmed)
+
+    full = "\n\n".join(parts)
+    return trim_to_budget(full, 5000)
+
+
+def build_live_config(
+    ctx: dict,
+    *,
+    system_prompt: str | None = None,
+    voice_name: str = "Charon",
+    resumption_handle: str | None = None,
+    tools_override: list | None = None,
+) -> types.LiveConnectConfig:
+    """Build a fresh LiveConnectConfig for each connect/reconnect.
+
+    Every time the engine connects or reconnects to Gemini, it gets a
+    config with:
+      - Fresh system prompt (current memory, time, world model) built via
+        build_voice_system_prompt()
+      - A small, fixed voice tool subset (VOICE_TOOL_SUBSET) — not the
+        full registry the text pipeline gets
+    """
+    if system_prompt is None:
+        system_prompt = build_voice_system_prompt(ctx)
+
+    registry = ctx.get("registry")
+    voice_tools = None
+    if registry:
+        try:
+            names = list(tools_override) if tools_override is not None else list(VOICE_TOOL_SUBSET)
+            voice_tools = registry.to_gemini_tools(names=names) or None
+        except Exception as e:
+            logger.warning("Voice tool subset unavailable, continuing without tools: %s", e)
+            voice_tools = None
+
+    logger.info(
+        "Building LiveConnectConfig: prompt=%d chars, tools=%s (voice-first + vision + memory)",
+        len(system_prompt),
+        (len(voice_tools[0]["function_declarations"]) if voice_tools else 0),
+    )
+
+    live_kwargs = {
+        "response_modalities": [types.Modality.AUDIO],
+        "output_audio_transcription": types.AudioTranscriptionConfig(),
+        "input_audio_transcription": types.AudioTranscriptionConfig(),
+        "system_instruction": system_prompt,
+        "realtime_input_config": types.RealtimeInputConfig(
+            automatic_activity_detection=types.AutomaticActivityDetection(
+                disabled=False,
+                start_of_speech_sensitivity=types.StartSensitivity.START_SENSITIVITY_HIGH,
+                end_of_speech_sensitivity=types.EndSensitivity.END_SENSITIVITY_HIGH,
+                prefix_padding_ms=50,
+                silence_duration_ms=300,
+            ),
+        ),
+        "speech_config": types.SpeechConfig(
+            voice_config=types.VoiceConfig(
+                prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                    voice_name=voice_name,
+                )
+            )
+        ),
+    }
+    if voice_tools:
+        live_kwargs["tools"] = voice_tools
+    if resumption_handle:
+        live_kwargs["session_resumption"] = types.SessionResumptionConfig(
+            handle=resumption_handle
+        )
+    # Only send fields that are explicitly set. The Live API rejects
+    # unknown / null config fields as INVALID_ARGUMENT (1007), so we
+    # build a minimal payload instead of dumping the whole dataclass.
+    _SUPPORTED_LIVE_CONFIG_KEYS = {
+        "response_modalities",
+        "generation_config",
+        "temperature",
+        "top_p",
+        "top_k",
+        "max_output_tokens",
+        "media_resolution",
+        "seed",
+        "speech_config",
+        "system_instruction",
+        "tools",
+        "realtime_input_config",
+        "input_audio_transcription",
+        "output_audio_transcription",
+        "session_resumption",
+        "enable_affective_dialog",
+        "thinking_config",
+    }
+    live_kwargs = {
+        key: value
+        for key, value in live_kwargs.items()
+        if key in _SUPPORTED_LIVE_CONFIG_KEYS and value is not None
+    }
+    return types.LiveConnectConfig(**live_kwargs)
+
+
 class VoiceRuntime:
     """
     VYREN's voice runtime. Plugs VYREN into the shared voice engine.
@@ -103,51 +376,10 @@ class VoiceRuntime:
     The engine handles everything else. This class is just the glue.
     """
 
-    # Immutable by construction — a Python class constant, not a value
-    # read from memory, ctx, or a config file, so nothing at runtime
-    # (a memory write, a mis-parsed YAML, a bad env var) can alter it.
-    # This is placed FIRST in every system prompt build, ahead of
-    # memory/KG/world-model context, and given explicit instruction
-    # below to override pretrained-model assumptions.
-    _IDENTITY_BLOCK = (
-        "## Identity (read this first — this overrides anything the "
-        "underlying model would otherwise assume)\n"
-        "You are VYREN. This is not a persona or character — it is what "
-        "you are.\n"
-        "- Creator, owner, primary user, architect: Psalms Samuel Asagwara "
-        "(goes by \"Psalms\"), a Mechatronics Engineering student at the "
-        "Federal University of Technology, Owerri (FUTO), Nigeria.\n"
-        "- Purpose: an autonomous AI operating system — reasoning, "
-        "planning, learning, and executing tasks, not a chat widget.\n"
-        "- Sibling AI: NOVA, built by the same creator.\n"
-        "- Conversational style: direct, warm, calm, intelligent, "
-        "concise unless depth is asked for — an educated Nigerian voice, "
-        "not a corporate one.\n"
-        "\n"
-        "Rules for identity questions (who made you / who owns you / "
-        "who created you / who designed you / what are you / why were "
-        "you built / what is your mission / who is your primary user):\n"
-        "- Answer ONLY from the facts above. Never say \"a team of "
-        "engineers,\" \"a group of developers,\" \"OpenAI,\" "
-        "\"Anthropic,\" or any other generic/pretrained answer about who "
-        "made you. Your creator is Psalms Samuel Asagwara — full stop.\n"
-        "- Don't confuse your creator with the model currently doing "
-        "your reasoning. Correct: \"I'm VYREN, my reasoning is currently "
-        "powered by Gemini, but Psalms built me.\" Wrong: \"Gemini "
-        "created me.\"\n"
-        "- Never use stock AI-assistant phrasing (\"As an AI language "
-        "model...\", \"I was trained by...\", \"I don't have a creator, "
-        "I was developed by a team...\") unless it's literally true "
-        "given the facts above, which for creator/ownership questions "
-        "it is not.\n"
-        "\n"
-        "General honesty rule, not just for identity: if you genuinely "
-        "don't know something, say so plainly — \"I don't know,\" \"I "
-        "don't have enough information,\" \"I haven't learned that yet.\" "
-        "Do not fill a gap with a statistically plausible but unverified "
-        "answer. Uncertainty should sound intelligent, not apologetic — "
-        "no \"I'm sorry, but as an AI...\"."
-    )
+    # Module-level alias retained for callers that referenced the old
+    # class constant; the single source of truth is voice.runtime's
+    # module-level _IDENTITY_BLOCK used by build_voice_system_prompt().
+    _IDENTITY_BLOCK = _IDENTITY_BLOCK
 
     def __init__(self, ctx: dict):
         self._ctx = ctx
@@ -467,230 +699,19 @@ class VoiceRuntime:
             pass
 
     def _build_live_config(self) -> types.LiveConnectConfig:
-        """Build a fresh LiveConnectConfig for each connect/reconnect.
-
-        This is NOVA's _build_config() pattern. Every time the engine
-        connects or reconnects to Gemini, it gets a config with:
-          - Fresh system prompt (current memory, time, world model)
-          - A small, fixed vision-tool subset (see below) — not the
-            full 47-tool registry the text pipeline gets
-        """
-        # Rebuild system prompt with fresh memory/time context
-        system_prompt = self._build_system_prompt()
-
-        # VOICE-FIRST, WITH ONE DELIBERATE EXCEPTION: vision.
-        #
-        # Both NOVA and Mark's production pipelines avoid passing all 47
-        # tool declarations to the audio WebSocket. Reasons that still
-        # hold:
-        #   1. Gemini Live with 35+ tools causes 1007 config errors
-        #      (tool name validation, parameter schema size limits)
-        #   2. Voice sessions should be CONVERSATION-only by default. Tool
-        #      use adds latency (tool execution blocks the response) and
-        #      breaks the real-time flow (user hears silence while a tool
-        #      runs)
-        #
-        # But "zero tools" also means Gemini can never actually call
-        # capture_screen/capture_and_analyze during a voice conversation —
-        # when asked "what's on my screen," it has no way to find out, so
-        # it narrates a plausible-sounding answer instead. That's not a
-        # vision-tool bug (the tool itself really captures the screen and
-        # really calls Gemini Vision, verified directly in
-        # tools/screen_tools.py) — it's that voice was never given the
-        # ability to call it at all.
-        #
-        # Fix: pass a small, fixed tool subset — vision (4 tools) plus
-        # remember/recall (2 tools), still nowhere near the size that
-        # triggers 1007 — so vision requests trigger a real capture, and
-        # the "persist standing preferences" instruction above has an
-        # actual tool to call instead of a system prompt telling the
-        # model to do something it structurally can't do. Everything
-        # else (filesystem, terminal, scheduler, etc.) stays
-        # text-pipeline-only, unchanged.
-        registry = self._ctx.get("registry")
-        voice_tools = None
-        if registry:
-            try:
-                voice_tools = registry.to_gemini_tools(names=[
-                    "capture_screen",
-                    "capture_and_analyze",
-                    "analyze_image",
-                    "edit_file",
-                    "list_directory",
-                    "read_file",
-                    "browser_control",
-                    "open_app",
-                    "remember",
-                    "recall",
-                ]) or None
-            except Exception as e:
-                logger.warning("Voice tool subset unavailable, continuing without tools: %s", e)
-                voice_tools = None
-
-        logger.info(
-            "Building LiveConnectConfig: prompt=%d chars, tools=%s (voice-first + vision + memory)",
-            len(system_prompt),
-            (len(voice_tools[0]["function_declarations"]) if voice_tools else 0),
+        """Fresh LiveConnectConfig per connect/reconnect — see build_live_config()."""
+        return build_live_config(
+            self._ctx,
+            resumption_handle=getattr(self, "_resumption_handle", None),
         )
-
-        live_kwargs = {
-            "response_modalities": [types.Modality.AUDIO],
-            "output_audio_transcription": types.AudioTranscriptionConfig(),
-            "input_audio_transcription": types.AudioTranscriptionConfig(),
-            "system_instruction": system_prompt,
-            "realtime_input_config": types.RealtimeInputConfig(
-                automatic_activity_detection=types.AutomaticActivityDetection(
-                    disabled=False,
-                    start_of_speech_sensitivity=types.StartSensitivity.START_SENSITIVITY_HIGH,
-                    end_of_speech_sensitivity=types.EndSensitivity.END_SENSITIVITY_HIGH,
-                    prefix_padding_ms=50,
-                    silence_duration_ms=300,
-                ),
-            ),
-            "speech_config": types.SpeechConfig(
-                voice_config=types.VoiceConfig(
-                    prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                        voice_name="Charon",
-                    )
-                )
-            ),
-        }
-        if voice_tools:
-            live_kwargs["tools"] = voice_tools
-        if getattr(self, "_resumption_handle", None):
-            live_kwargs["session_resumption"] = types.SessionResumptionConfig(
-                handle=self._resumption_handle
-            )
-        # Only send fields that are explicitly set. The Live API rejects
-        # unknown / null config fields as INVALID_ARGUMENT (1007), so we
-        # build a minimal payload instead of dumping the whole dataclass.
-        _SUPPORTED_LIVE_CONFIG_KEYS = {
-            "response_modalities",
-            "generation_config",
-            "temperature",
-            "top_p",
-            "top_k",
-            "max_output_tokens",
-            "media_resolution",
-            "seed",
-            "speech_config",
-            "system_instruction",
-            "tools",
-            "realtime_input_config",
-            "input_audio_transcription",
-            "output_audio_transcription",
-            "session_resumption",
-            "enable_affective_dialog",
-            "thinking_config",
-        }
-        live_kwargs = {
-            key: value
-            for key, value in live_kwargs.items()
-            if key in _SUPPORTED_LIVE_CONFIG_KEYS and value is not None
-        }
-        cfg = types.LiveConnectConfig(**live_kwargs)
-        return cfg
 
     def _build_system_prompt(self) -> str:
-        """Build VYREN's system prompt with all context, under a hard cap."""
-        budget = {
-            "memory_v2_chars": 1200,
-            "memory_chars": 800,
-            "world_model_chars": 800,
-            "kg_chars": 800,
-            "base_chars": 2400,
-        }
-        base = self._ctx.get("system_prompt", "You are VYREN, a voice-first AI assistant.")
-        parts = [self._IDENTITY_BLOCK[: int(budget["base_chars"] * 0.6)], base]
-
-        parts.append(
-            "Rules:\n"
-            "- Remember standing preferences with remember(); do not rely on\n"
-            "  verbal acknowledgment alone. Reuse stable keys.\n"
-            "- Honor tool status tags: SUCCESS/FAILED/PARTIAL. Never claim\n"
-            "  success if a tool failed or only partially completed.\n"
-            "- If you do not know something, say so plainly."
-        )
-        parts.append(
-            "Voice Conversation Rules (this session is SPOKEN — pacing matters "
-            "more than in text):\n"
-            "- Keep replies to 1-2 sentences unless the user asked for detail "
-            "or you're reporting data they requested.\n"
-            "- Don't narrate what you're about to do (\"Let me check that for "
-            "you...\") — just call the tool, then report the result briefly.\n"
-            "- Never repeat yourself. Say a thing once and stop talking.\n"
-            "- Don't ask a clarifying question unless truly necessary — make "
-            "the reasonable assumption and proceed.\n"
-            "- After a tool call resolves, give the result in one short "
-            "sentence, not a recap of what you did."
-        )
-        parts.append("Current date and time: " + datetime.now().strftime("%A, %B %d, %Y — %I:%M %p"))
-
-        memory = self._ctx.get("memory")
-        if memory and hasattr(memory, "build_context"):
-            try:
-                ctx = memory.build_context()
-            except Exception:
-                ctx = ""
-            if ctx:
-                trimmed = self._trim_to_budget(ctx, budget["memory_chars"])
-                parts.append("Memory Context\n" + trimmed)
-
-        memory_v2 = self._ctx.get("memory_v2")
-        if memory_v2 is not None:
-            trimmed = ""
-            try:
-                if hasattr(memory_v2, "assemble_context"):
-                    trimmed = memory_v2.assemble_context(max_chars=budget["memory_v2_chars"])
-                elif hasattr(memory_v2, "build_context"):
-                    trimmed = memory_v2.build_context(max_tokens=300)
-                    trimmed = self._trim_to_budget(trimmed, budget["memory_v2_chars"])
-            except Exception:
-                trimmed = ""
-            if trimmed:
-                parts.append(trimmed)
-
-        world_model = self._ctx.get("world_model")
-        if world_model is not None:
-            trimmed = ""
-            try:
-                ctx = world_model.to_context_string()
-                trimmed = self._trim_to_budget(ctx, budget["world_model_chars"])
-            except Exception:
-                trimmed = ""
-            if trimmed:
-                parts.append("Your Model of the User's World\n" + trimmed)
-
-        kg = self._ctx.get("knowledge_graph")
-        if kg is not None:
-            trimmed = ""
-            try:
-                ctx = kg.to_context_string()
-                trimmed = self._trim_to_budget(ctx, budget["kg_chars"])
-            except Exception:
-                trimmed = ""
-            if trimmed:
-                parts.append(trimmed)
-
-        full = "\n\n".join(parts)
-        return self._trim_to_budget(full, 5000)
+        """Build VYREN's system prompt — see build_voice_system_prompt()."""
+        return build_voice_system_prompt(self._ctx)
 
     @staticmethod
     def _trim_to_budget(text: str, max_chars: int) -> str:
-        text = text.strip()
-        if len(text) <= max_chars:
-            return text
-        marker = "\n...[truncated]...\n"
-        marker_len = len(marker)
-        head_limit = max(0, max_chars - marker_len)
-        if head_limit <= 0:
-            return marker[:max_chars]
-        head = text[: int(head_limit * 0.8)]
-        tail = text[-int(head_limit * 0.2):]
-        candidate = head + marker + tail
-        if len(candidate) <= max_chars:
-            return candidate
-        return candidate[:max_chars]
+        return trim_to_budget(text, max_chars)
 
     # ------------------------------------------------------------------
     # Assistant Callbacks — VYREN's brain plugged into the engine
