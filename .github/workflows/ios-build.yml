@@ -25,6 +25,16 @@ jobs:
         with:
           node-version: 22
 
+      - name: Select latest Xcode
+        run: |
+          echo "Installed Xcodes:"
+          ls -1 /Applications | grep -i xcode || true
+          NEWEST=$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -1 || true)
+          if [ -n "$NEWEST" ]; then
+            sudo xcode-select -s "$NEWEST"
+          fi
+          xcodebuild -version
+
       - name: Install JS deps
         working-directory: apps/mobile
         run: npm ci
