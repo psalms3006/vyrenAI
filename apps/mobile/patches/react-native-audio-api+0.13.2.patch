@@ -1,0 +1,21 @@
+diff --git a/node_modules/react-native-audio-api/ios/audioapi/ios/system/AudioSessionManager.mm b/node_modules/react-native-audio-api/ios/audioapi/ios/system/AudioSessionManager.mm
+index d115837..8f3c479 100644
+--- a/node_modules/react-native-audio-api/ios/audioapi/ios/system/AudioSessionManager.mm
++++ b/node_modules/react-native-audio-api/ios/audioapi/ios/system/AudioSessionManager.mm
+@@ -20,6 +20,7 @@
+ static const AVAudioSessionCategoryOptions
+     RNAudioSessionCategoryOptionBluetoothHighQualityRecordingMask = 1 << 19;
+ static const AVAudioSessionCategoryOptions RNAudioSessionCategoryOptionFarFieldInputMask = 1 << 18;
++static const AVAudioSessionCategoryOptions RNAudioSessionCategoryOptionAllowBluetoothHFPMask = 1 << 4;
+ 
+ @implementation AudioSessionManager
+ 
+@@ -513,7 +514,7 @@ static AudioSessionManager *_sharedInstance = nil;
+     }
+ 
+     if ([option isEqualToString:@"allowBluetoothHFP"]) {
+-      options |= AVAudioSessionCategoryOptionAllowBluetoothHFP;
++      options |= RNAudioSessionCategoryOptionAllowBluetoothHFPMask;
+       continue;
+     }
+
