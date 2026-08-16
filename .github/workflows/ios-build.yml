@@ -1,0 +1,66 @@
+name: iOS Build (.ipa)
+
+on:
+  workflow_dispatch:
+    inputs:
+      config:
+        description: Build configuration
+        default: Release
+        type: choice
+        options:
+          - Release
+          - Debug
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install JS deps
+        working-directory: apps/mobile
+        run: npm ci
+
+      - name: Install CocoaPods (bundled)
+        working-directory: apps/mobile
+        run: |
+          bundle install
+          bundle exec pod install --project-directory=ios
+
+      - name: Build .app (unsigned)
+        working-directory: apps/mobile/ios
+        env:
+          CONFIG: ${{ inputs.config || 'Release' }}
+        run: |
+          xcodebuild \
+            -workspace VyrenMobile.xcworkspace \
+            -scheme VyrenMobile \
+            -configuration $CONFIG \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            build
+
+      - name: Package .ipa (unsigned)
+        working-directory: apps/mobile/ios/build/Build/Products/${{ inputs.config || 'Release' }}-iphoneos
+        run: |
+          mkdir -p Payload
+          cp -R VyrenMobile.app Payload/
+          zip -r VyrenMobile.ipa Payload/
+          ls -lh VyrenMobile.ipa
+
+      - name: Upload .ipa artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: VyrenMobile-unsigned
+          path: apps/mobile/ios/build/Build/Products/${{ inputs.config || 'Release' }}-iphoneos/VyrenMobile.ipa
+          if-no-files-found: error
